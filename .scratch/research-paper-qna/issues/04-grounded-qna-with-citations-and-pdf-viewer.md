@@ -4,10 +4,10 @@
 
 **Blocked by:** 03: Hybrid Retrieval & Reranking Index (Qdrant Cloud + Cohere Rerank)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Web UI displays a split-screen workbench built with shadcn/ui components, featuring a responsive PDF viewer on the left and streaming discussion on the right.
-- [ ] LangChain synthesis chain generates answers grounded strictly in retrieved Evidence Chunks with an explicit refusal policy when evidence is missing.
-- [ ] Generated answers render clickable Citation Anchors (e.g. `[Paper A · p. 4]`) pointing to exact page numbers and sections.
-- [ ] Clicking any Citation Anchor badge jumps the PDF viewer directly to the designated page.
-- [ ] Integration test verifies that a grounded query returns streaming text with valid citation metadata and triggers page navigation.
+- [x] Web UI displays a split-screen workbench built with shadcn/ui components, featuring a responsive PDF viewer on the left and streaming discussion on the right.
+- [x] LangChain synthesis chain generates answers grounded strictly in retrieved Evidence Chunks with an explicit refusal policy when evidence is missing.
+- [x] Generated answers render clickable Citation Anchors (e.g. `[Paper A · p. 4]`) pointing to exact page numbers and sections.
+- [x] Clicking any Citation Anchor badge jumps the PDF viewer directly to the designated page.
+- [x] Integration test verifies that a grounded query returns streaming text with valid citation metadata and triggers page navigation.

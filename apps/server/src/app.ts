@@ -9,6 +9,7 @@ import { jobManager } from './services/jobManager.js';
 import { paperStore } from './services/paperStore.js';
 import { extractDocumentStructure } from './services/extraction.js';
 import { chunkPaperBySections, retrievalService } from './services/retrieval.js';
+import { streamGroundedSynthesis } from './services/synthesis.js';
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -153,8 +154,8 @@ export function createApp(): express.Application {
     res.json({ results });
   });
 
-  // Chat Streaming Endpoint
-  app.post('/api/chat', (req: Request, res: Response): void => {
+  // Chat Streaming Endpoint with Grounded Synthesis & Attributions
+  app.post('/api/chat', async (req: Request, res: Response): Promise<void> => {
     const body = req.body as Partial<QueryRequest>;
 
     if (!body || typeof body.query !== 'string' || body.query.trim().length === 0) {
@@ -167,21 +168,11 @@ export function createApp(): express.Application {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders?.();
 
-    const sampleTokens = [
-      'Analyzing ',
-      'research ',
-      'paper... ',
-      'Retrieval-augmented ',
-      'generation ',
-      'initialized.',
-    ];
-
-    sampleTokens.forEach((token) => {
-      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    await streamGroundedSynthesis(res, {
+      query: body.query.trim(),
+      paperId: body.paperId,
+      history: body.history,
     });
-
-    res.write('data: [DONE]\n\n');
-    res.end();
   });
 
   return app;

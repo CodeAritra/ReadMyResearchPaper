@@ -95,7 +95,17 @@ export class RetrievalService {
     options?: { paperId?: string; limit?: number }
   ): Promise<EvidenceChunk[]> {
     const limit = options?.limit ?? 5;
-    const queryTokens = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+    const stopWords = new Set([
+      'what', 'is', 'the', 'in', 'of', 'and', 'to', 'a', 'an', 'for', 'on', 'with', 'as',
+      'by', 'at', 'from', 'this', 'that', 'these', 'those', 'it', 'its', 'paper', 'according',
+      'does', 'did', 'do', 'can', 'could', 'how', 'why', 'when', 'where', 'which', 'who'
+    ]);
+
+    const queryTokens = query
+      .toLowerCase()
+      .replace(/[^a-z0-9\s_-]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2 && !stopWords.has(t));
 
     let candidates = this.indexedChunks;
     if (options?.paperId) {

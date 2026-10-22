@@ -3,11 +3,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BookOpen, Send, FileText, ChevronRight, Terminal, Layers } from 'lucide-react';
 import { UploadPaperDialog } from '@/components/UploadPaperDialog';
+import { DocumentReader } from '@/components/DocumentReader';
+import { CitationBadge } from '@/components/CitationBadge';
+import { Attribution } from '@research-qna/types';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  attributions?: Attribution[];
 }
 
 interface PaperSection {
@@ -34,17 +38,30 @@ export default function WorkbenchPage() {
       { title: 'Abstract', pageNumber: 1 },
       { title: 'Introduction', pageNumber: 1 },
       { title: 'Model Architecture', pageNumber: 2 },
-      { title: 'Attention', pageNumber: 3 },
+      { title: 'Methodology', pageNumber: 3 },
+      { title: 'Attention Mechanism', pageNumber: 4 },
       { title: 'Results', pageNumber: 7 },
     ],
-    rawMarkdown: `The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. We propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output.`,
+    rawMarkdown: `The Transformer computes self-attention using queries, keys, and values:
+$$\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V$$
+Multi-Head Attention allows the model to jointly attend to information at different representation subspaces.`,
   });
 
+  const [activePage, setActivePage] = useState(1);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Welcome to the Research Paper Q&A Workbench. Ready to analyze uploaded literature and verify citations with strict source attribution.',
+      content:
+        'Welcome to the Research Paper Q&A Workbench. Ready to analyze uploaded literature and verify citations with strict source attribution.',
+      attributions: [
+        {
+          paperId: 'paper-sample-1',
+          paperTitle: 'Attention Is All You Need',
+          sectionTitle: 'Methodology',
+          pageNumber: 3,
+        },
+      ],
     },
   ]);
   const [input, setInput] = useState('');
@@ -61,18 +78,23 @@ export default function WorkbenchPage() {
       if (res.ok) {
         const paper = await res.json();
         setActivePaper(paper);
+        setActivePage(1);
         setMessages((prev) => [
           ...prev,
           {
             id: `sys-${Date.now()}`,
             role: 'assistant',
-            content: `Ingested "${paper.title}" (${paper.pageCount} pages, ${paper.sections.length} structural sections). Ready for questions.`,
+            content: `Ingested "${paper.title}" (${paper.pageCount} pages, ${paper.sections.length} structural sections). You can now ask questions with verifiable citations.`,
           },
         ]);
       }
     } catch (err) {
       console.error('Failed to load newly uploaded paper metadata', err);
     }
+  };
+
+  const handleNavigateCitation = (_paperId: string, pageNumber: number) => {
+    setActivePage(pageNumber);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,6 +113,7 @@ export default function WorkbenchPage() {
       id: assistantMessageId,
       role: 'assistant',
       content: '',
+      attributions: [],
     };
 
     setMessages((prev) => [...prev, userMessage, initialAssistantMessage]);
@@ -136,6 +159,15 @@ export default function WorkbenchPage() {
                 prev.map((msg) =>
                   msg.id === assistantMessageId
                     ? { ...msg, content: msg.content + parsed.token }
+                    : msg
+                )
+              );
+            }
+            if (parsed.attributions) {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, attributions: parsed.attributions }
                     : msg
                 )
               );
@@ -206,88 +238,48 @@ export default function WorkbenchPage() {
           <div>
             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2 mb-2 flex items-center justify-between">
               <span>Sections</span>
-              <span className="text-[10px] font-mono bg-zinc-800 px-1.5 py-0.2 rounded">
+              <span className="text-[10px] font-mono bg-zinc-800 px-1.5 py-0.5 rounded">
                 {activePaper.sections.length}
               </span>
             </div>
             <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
               {activePaper.sections.map((sec, idx) => (
-                <div
+                <button
                   key={idx}
-                  className="flex items-center justify-between px-2 py-1 rounded text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors font-mono"
+                  onClick={() => setActivePage(sec.pageNumber)}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-[11px] transition-colors font-mono text-left ${
+                    activePage === sec.pageNumber
+                      ? 'bg-zinc-800 text-zinc-100 font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                  }`}
                 >
                   <span className="truncate max-w-[150px]">{sec.title}</span>
                   <span className="text-[10px] text-zinc-400">p. {sec.pageNumber}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
         </div>
 
         <div className="border-t border-zinc-800/80 pt-3 text-[11px] text-zinc-400 font-mono flex items-center justify-between">
-          <span>Express Ingestion</span>
+          <span>Grounding & Citations</span>
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         </div>
       </aside>
 
       {/* Main 2-Pane Workbench */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Pane: Document Canvas */}
-        <section className="flex-1 border-r border-zinc-800 bg-[#090a0f] flex flex-col">
-          <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400 bg-[#0d0f14]/50">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-zinc-400">DOCUMENT</span>
-              <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-              <span className="text-zinc-200 font-medium truncate max-w-sm">
-                {activePaper.title}
-              </span>
-            </div>
-            <div className="font-mono text-[11px] text-zinc-400">
-              {activePaper.pageCount} Pages · {activePaper.sections.length} Structural Sections
-            </div>
-          </header>
-
-          <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center bg-zinc-950/40">
-            <div className="max-w-2xl w-full bg-zinc-900/40 border border-zinc-800/80 rounded-lg p-8 shadow-2xl text-zinc-300 space-y-6 leading-relaxed text-sm">
-              <div className="border-b border-zinc-800 pb-4">
-                <h1 className="text-xl font-bold tracking-tight text-zinc-100">
-                  {activePaper.title}
-                </h1>
-                <p className="text-xs text-zinc-400 mt-1 font-mono">
-                  {activePaper.authors.join(', ')}
-                </p>
-              </div>
-
-              <div>
-                <h2 className="text-xs uppercase font-mono tracking-wider text-zinc-400 mb-2 flex items-center gap-1.5">
-                  <Layers className="w-3 h-3 text-zinc-400" />
-                  Extracted Structure
-                </h2>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  {activePaper.sections.map((sec, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2 rounded bg-zinc-900/70 border border-zinc-800 flex items-center justify-between text-zinc-300"
-                    >
-                      <span className="truncate">{sec.title}</span>
-                      <span className="text-[10px] text-zinc-400 shrink-0 ml-2">p. {sec.pageNumber}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {activePaper.rawMarkdown && (
-                <div className="border-t border-zinc-800 pt-4">
-                  <h2 className="text-xs uppercase font-mono tracking-wider text-zinc-400 mb-2">
-                    Transcribed Preview
-                  </h2>
-                  <div className="text-xs font-mono text-zinc-300 bg-zinc-900/90 p-4 rounded border border-zinc-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
-                    {activePaper.rawMarkdown}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Left Pane: Interactive Document Canvas */}
+        <section className="flex-1 border-r border-zinc-800 bg-[#090a0f] flex flex-col overflow-hidden">
+          <DocumentReader
+            paperTitle={activePaper.title}
+            authors={activePaper.authors}
+            pageCount={activePaper.pageCount}
+            sections={activePaper.sections}
+            rawMarkdown={activePaper.rawMarkdown}
+            activePage={activePage}
+            onPageChange={setActivePage}
+          />
         </section>
 
         {/* Right Pane: Discussion & Grounded Q&A */}
@@ -297,7 +289,7 @@ export default function WorkbenchPage() {
               <Terminal className="w-3.5 h-3.5 text-zinc-400" />
               <span className="font-medium text-zinc-200">Discussion</span>
             </div>
-            <span className="text-[11px] font-mono text-zinc-400">Grounded Mode</span>
+            <span className="text-[11px] font-mono text-zinc-400">Strict Attribution</span>
           </header>
 
           {/* Messages Stream */}
@@ -310,16 +302,35 @@ export default function WorkbenchPage() {
                 }`}
               >
                 <div
-                  className={`max-w-[90%] rounded-md px-3.5 py-2.5 ${
+                  className={`max-w-[92%] rounded-md px-3.5 py-2.5 ${
                     msg.role === 'user'
                       ? 'bg-zinc-800 text-zinc-100 border border-zinc-700/60 font-medium'
                       : 'bg-zinc-900/80 text-zinc-300 border border-zinc-800/80'
                   }`}
                 >
-                  <div className="text-[10px] font-mono text-zinc-400 mb-1">
-                    {msg.role === 'user' ? 'YOU' : 'ASSISTANT'}
+                  <div className="text-[10px] font-mono text-zinc-400 mb-1 flex items-center justify-between">
+                    <span>{msg.role === 'user' ? 'YOU' : 'RESEARCH ASSISTANT'}</span>
                   </div>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+
+                  <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+
+                  {/* Render Citation Anchors */}
+                  {msg.attributions && msg.attributions.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-zinc-800/80">
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                        Sources & Attributions
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {msg.attributions.map((attr, idx) => (
+                          <CitationBadge
+                            key={idx}
+                            attribution={attr}
+                            onNavigate={handleNavigateCitation}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

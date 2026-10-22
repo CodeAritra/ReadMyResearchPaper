@@ -1,0 +1,15 @@
+{
+  "name": "research-paper-qna",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "test": "npm run --workspaces --if-present test",
+    "dev:server": "npm run --workspace=apps/server dev",
+    "dev:web": "npm run --workspace=apps/web dev"
+  }
+}

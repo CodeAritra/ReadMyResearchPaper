@@ -4,10 +4,10 @@
 
 **Blocked by:** 02: Asynchronous PDF Ingestion & Multimodal Structure Extraction
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Parsed papers are chunked along structural section boundaries into 500–800 token units with 100-token overlap.
-- [ ] Every Evidence Chunk contains complete provenance metadata (`paperId`, `paperTitle`, `sectionTitle`, `pageNumber`, `chunkIndex`).
-- [ ] Chunks are embedded and indexed into Qdrant Cloud using hybrid sparse and dense vectors.
-- [ ] Candidate chunks for a query are re-scored using Cohere Rerank v3 to prioritize the top relevant passages.
-- [ ] Integration test verifies that querying for technical acronyms, dataset names, and conceptual phrases retrieves the expected chunks with verified metadata.
+- [x] Parsed papers are chunked along structural section boundaries into 500–800 token units with 100-token overlap.
+- [x] Every Evidence Chunk contains complete provenance metadata (`paperId`, `paperTitle`, `sectionTitle`, `pageNumber`, `chunkIndex`).
+- [x] Chunks are embedded and indexed into Qdrant Cloud using hybrid sparse and dense vectors.
+- [x] Candidate chunks for a query are re-scored using Cohere Rerank v3 to prioritize the top relevant passages.
+- [x] Integration test verifies that querying for technical acronyms, dataset names, and conceptual phrases retrieves the expected chunks with verified metadata.

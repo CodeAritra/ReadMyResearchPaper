@@ -10,6 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@langchain/cohere": "^1.1.0",
+    "@langchain/core": "^1.2.20",
+    "@langchain/google-genai": "^2.3.4",
+    "@langchain/qdrant": "^1.0.3",
+    "@qdrant/js-client-rest": "^1.20.0",
     "@research-qna/types": "*",
     "@types/multer": "^2.3.0",
     "cors": "^2.8.5",

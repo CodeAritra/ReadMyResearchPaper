@@ -8,6 +8,7 @@ import { QueryRequest } from '@research-qna/types';
 import { jobManager } from './services/jobManager.js';
 import { paperStore } from './services/paperStore.js';
 import { extractDocumentStructure } from './services/extraction.js';
+import { chunkPaperBySections, retrievalService } from './services/retrieval.js';
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -73,10 +74,9 @@ export function createApp(): express.Application {
           jobManager.updateJob(job.jobId, { status: 'parsing', progress: 20 });
           const extracted = await extractDocumentStructure(filePath, originalFilename);
 
-          jobManager.updateJob(job.jobId, { status: 'extracting', progress: 60 });
+          jobManager.updateJob(job.jobId, { status: 'extracting', progress: 50 });
 
-          // Persist paper metadata & extracted structure
-          paperStore.savePaper({
+          const paper = {
             id: paperId,
             title: extracted.title,
             authors: extracted.authors,
@@ -85,12 +85,20 @@ export function createApp(): express.Application {
             sections: extracted.sections,
             rawMarkdown: extracted.rawMarkdown,
             createdAt: new Date().toISOString(),
-          });
+          };
+
+          // Persist paper metadata & extracted structure
+          paperStore.savePaper(paper);
+
+          // Chunk and index into retrieval service
+          jobManager.updateJob(job.jobId, { status: 'indexing', progress: 80 });
+          const chunks = chunkPaperBySections(paper, extracted.rawMarkdown);
+          await retrievalService.indexChunks(chunks);
 
           jobManager.updateJob(job.jobId, {
             status: 'completed',
             progress: 100,
-            message: 'Document extraction completed successfully',
+            message: 'Document extraction and indexing completed successfully',
           });
         } catch (err: any) {
           console.error('[Ingestion Worker] Error:', err);
@@ -126,6 +134,23 @@ export function createApp(): express.Application {
   // List all indexed papers
   app.get('/api/papers', (_req: Request, res: Response): void => {
     res.json(paperStore.listPapers());
+  });
+
+  // Evidence Chunk Search Endpoint (Hybrid Retrieval Seam)
+  app.post('/api/search', async (req: Request, res: Response): Promise<void> => {
+    const { query, paperId, limit } = req.body;
+
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      res.status(400).json({ error: 'query is required and must be a non-empty string' });
+      return;
+    }
+
+    const results = await retrievalService.search(query, {
+      paperId,
+      limit: typeof limit === 'number' ? limit : 5,
+    });
+
+    res.json({ results });
   });
 
   // Chat Streaming Endpoint

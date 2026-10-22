@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] Web UI displays a split-screen workbench with a responsive PDF viewer on the left and streaming discussion on the right.
+- [ ] Web UI displays a split-screen workbench built with shadcn/ui components, featuring a responsive PDF viewer on the left and streaming discussion on the right.
 - [ ] LangChain synthesis chain generates answers grounded strictly in retrieved Evidence Chunks with an explicit refusal policy when evidence is missing.
 - [ ] Generated answers render clickable Citation Anchors (e.g. `[Paper A · p. 4]`) pointing to exact page numbers and sections.
 - [ ] Clicking any Citation Anchor badge jumps the PDF viewer directly to the designated page.

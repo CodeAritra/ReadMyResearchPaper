@@ -81,9 +81,13 @@ The system strictly implements the canonical domain concepts defined in `GLOSSAR
 - A `search_uploaded_papers` tool encapsulates Qdrant hybrid retrieval and Cohere reranking.
 - Modular tool interfaces are reserved for future external literature providers (`search_arxiv` and `search_web`), allowing the model to route queries between local collection evidence and external academic indices.
 
-### Minimalist Academic UI
+### Minimalist Academic UI & shadcn/ui
 - Clean monochromatic neutral palette (slate/zinc/gray) with high-contrast text and muted interactive citation badges.
+- Built using **shadcn/ui** design patterns with accessible Radix UI primitives and Tailwind CSS utilities inside `apps/web/src/components/ui/`.
 - Split-screen workbench: Left pane hosts the primary document reader (PDF canvas with zoom and page jumping); Right pane hosts the collapsible discussion and attribution inspector.
+
+### Containerization Strategy (Final Phase)
+- Multi-stage Docker builds for `apps/server` and `apps/web` with a root `docker-compose.yml` for unified local or production orchestration, implemented at the completion of feature slices.
 
 ## Testing Decisions
 

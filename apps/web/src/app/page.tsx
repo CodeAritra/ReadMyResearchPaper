@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { BookOpen, Send, FileText, ChevronRight, Sparkles, Terminal } from 'lucide-react';
+import { BookOpen, Send, FileText, ChevronRight, Terminal, Layers } from 'lucide-react';
+import { UploadPaperDialog } from '@/components/UploadPaperDialog';
 
 interface Message {
   id: string;
@@ -9,7 +10,36 @@ interface Message {
   content: string;
 }
 
+interface PaperSection {
+  title: string;
+  pageNumber: number;
+}
+
+interface ActivePaper {
+  id: string;
+  title: string;
+  authors: string[];
+  pageCount: number;
+  sections: PaperSection[];
+  rawMarkdown?: string;
+}
+
 export default function WorkbenchPage() {
+  const [activePaper, setActivePaper] = useState<ActivePaper>({
+    id: 'paper-sample-1',
+    title: 'Attention Is All You Need',
+    authors: ['Vaswani et al.'],
+    pageCount: 11,
+    sections: [
+      { title: 'Abstract', pageNumber: 1 },
+      { title: 'Introduction', pageNumber: 1 },
+      { title: 'Model Architecture', pageNumber: 2 },
+      { title: 'Attention', pageNumber: 3 },
+      { title: 'Results', pageNumber: 7 },
+    ],
+    rawMarkdown: `The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. We propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output.`,
+  });
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -24,6 +54,26 @@ export default function WorkbenchPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handlePaperUploaded = async (paperId: string) => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/papers/${paperId}`);
+      if (res.ok) {
+        const paper = await res.json();
+        setActivePaper(paper);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `sys-${Date.now()}`,
+            role: 'assistant',
+            content: `Ingested "${paper.title}" (${paper.pageCount} pages, ${paper.sections.length} structural sections). Ready for questions.`,
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error('Failed to load newly uploaded paper metadata', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +101,10 @@ export default function WorkbenchPage() {
       const response = await fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userQuery }),
+        body: JSON.stringify({
+          query: userQuery,
+          paperId: activePaper.id,
+        }),
       });
 
       if (!response.ok || !response.body) {
@@ -88,7 +141,6 @@ export default function WorkbenchPage() {
               );
             }
           } catch {
-            // Raw text fallback
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -99,7 +151,7 @@ export default function WorkbenchPage() {
           }
         }
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
@@ -129,36 +181,51 @@ export default function WorkbenchPage() {
             </span>
           </div>
 
-          <div>
-            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2 mb-2">
-              Collections
+          <div className="space-y-2">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2">
+              Ingestion
             </div>
-            <div className="space-y-1">
-              <button className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs bg-zinc-800/60 text-zinc-200 border border-zinc-700/50">
-                <span className="truncate">Attention & Transformers</span>
-                <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
-                  1 paper
-                </span>
-              </button>
-            </div>
+            <UploadPaperDialog onPaperUploaded={handlePaperUploaded} />
           </div>
 
           <div>
             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2 mb-2">
-              Current Paper
+              Active Paper
             </div>
             <div className="p-2.5 rounded border border-zinc-800/80 bg-zinc-900/50 text-xs text-zinc-400 space-y-1">
               <div className="flex items-center gap-1.5 text-zinc-300 font-medium truncate">
                 <FileText className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
-                <span className="truncate">Attention Is All You Need</span>
+                <span className="truncate">{activePaper.title}</span>
               </div>
-              <div className="text-[11px] text-zinc-400 font-mono">Vaswani et al. · 2017</div>
+              <div className="text-[11px] text-zinc-400 font-mono">
+                {activePaper.authors.join(', ')} · {activePaper.pageCount} pages
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2 mb-2 flex items-center justify-between">
+              <span>Sections</span>
+              <span className="text-[10px] font-mono bg-zinc-800 px-1.5 py-0.2 rounded">
+                {activePaper.sections.length}
+              </span>
+            </div>
+            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+              {activePaper.sections.map((sec, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between px-2 py-1 rounded text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors font-mono"
+                >
+                  <span className="truncate max-w-[150px]">{sec.title}</span>
+                  <span className="text-[10px] text-zinc-400">p. {sec.pageNumber}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
         <div className="border-t border-zinc-800/80 pt-3 text-[11px] text-zinc-400 font-mono flex items-center justify-between">
-          <span>Express + Qdrant</span>
+          <span>Express Ingestion</span>
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         </div>
       </aside>
@@ -169,43 +236,56 @@ export default function WorkbenchPage() {
         <section className="flex-1 border-r border-zinc-800 bg-[#090a0f] flex flex-col">
           <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400 bg-[#0d0f14]/50">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-zinc-400">READER</span>
+              <span className="font-mono text-zinc-400">DOCUMENT</span>
               <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-              <span className="text-zinc-200 font-medium">Attention Is All You Need (p. 1)</span>
+              <span className="text-zinc-200 font-medium truncate max-w-sm">
+                {activePaper.title}
+              </span>
             </div>
-            <div className="font-mono text-[11px] text-zinc-400">Page 1 of 11</div>
+            <div className="font-mono text-[11px] text-zinc-400">
+              {activePaper.pageCount} Pages · {activePaper.sections.length} Structural Sections
+            </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-8 flex items-center justify-center bg-zinc-950/40">
+          <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center bg-zinc-950/40">
             <div className="max-w-2xl w-full bg-zinc-900/40 border border-zinc-800/80 rounded-lg p-8 shadow-2xl text-zinc-300 space-y-6 leading-relaxed text-sm">
               <div className="border-b border-zinc-800 pb-4">
                 <h1 className="text-xl font-bold tracking-tight text-zinc-100">
-                  Attention Is All You Need
+                  {activePaper.title}
                 </h1>
                 <p className="text-xs text-zinc-400 mt-1 font-mono">
-                  Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N.
-                  Gomez, Łukasz Kaiser, Illia Polosukhin
+                  {activePaper.authors.join(', ')}
                 </p>
               </div>
 
               <div>
-                <h2 className="text-xs uppercase font-mono tracking-wider text-zinc-400 mb-2">
-                  Abstract
+                <h2 className="text-xs uppercase font-mono tracking-wider text-zinc-400 mb-2 flex items-center gap-1.5">
+                  <Layers className="w-3 h-3 text-zinc-400" />
+                  Extracted Structure
                 </h2>
-                <p className="text-xs text-zinc-300 text-justify leading-normal">
-                  The dominant sequence transduction models are based on complex recurrent or
-                  convolutional neural networks that include an encoder and a decoder. The best
-                  performing models also connect the encoder and decoder through an attention
-                  mechanism. We propose a new simple network architecture, the Transformer, based
-                  solely on attention mechanisms, dispensing with recurrence and convolutions
-                  entirely.
-                </p>
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  {activePaper.sections.map((sec, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded bg-zinc-900/70 border border-zinc-800 flex items-center justify-between text-zinc-300"
+                    >
+                      <span className="truncate">{sec.title}</span>
+                      <span className="text-[10px] text-zinc-400 shrink-0 ml-2">p. {sec.pageNumber}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="p-3 bg-zinc-900/90 rounded border border-zinc-800 text-xs font-mono text-zinc-400">
-                <span className="text-zinc-400 block mb-1">[Preview Document Canvas]</span>
-                Full interactive PDF rendering canvas with bounding boxes is activated in Ticket 04.
-              </div>
+              {activePaper.rawMarkdown && (
+                <div className="border-t border-zinc-800 pt-4">
+                  <h2 className="text-xs uppercase font-mono tracking-wider text-zinc-400 mb-2">
+                    Transcribed Preview
+                  </h2>
+                  <div className="text-xs font-mono text-zinc-300 bg-zinc-900/90 p-4 rounded border border-zinc-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                    {activePaper.rawMarkdown}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>

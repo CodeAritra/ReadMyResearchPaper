@@ -145,6 +145,35 @@ export class RetrievalService {
     }));
   }
 
+  async searchPartitioned(
+    query: string,
+    paperIds: string[],
+    limitPerPaper = 2
+  ): Promise<EvidenceChunk[]> {
+    if (!paperIds || paperIds.length === 0) {
+      return this.search(query, { limit: limitPerPaper * 2 });
+    }
+
+    const perPaperPromises = paperIds.map((paperId) =>
+      this.search(query, { paperId, limit: limitPerPaper })
+    );
+
+    const paperResults = await Promise.all(perPaperPromises);
+    const combined: EvidenceChunk[] = [];
+
+    // Interleave chunks from each paper to guarantee balanced representation across papers
+    const maxLen = Math.max(...paperResults.map((r) => r.length), 0);
+    for (let i = 0; i < maxLen; i++) {
+      for (const res of paperResults) {
+        if (i < res.length) {
+          combined.push(res[i]);
+        }
+      }
+    }
+
+    return combined;
+  }
+
   getChunksForPaper(paperId: string): EvidenceChunk[] {
     return this.indexedChunks.filter((c) => c.paperId === paperId);
   }

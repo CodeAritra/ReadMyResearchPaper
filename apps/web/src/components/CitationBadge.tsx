@@ -10,6 +10,12 @@ interface CitationBadgeProps {
 }
 
 export function CitationBadge({ attribution, onNavigate }: CitationBadgeProps) {
+  const displayTitle = attribution.paperTitle
+    ? attribution.paperTitle.length > 20
+      ? attribution.paperTitle.slice(0, 18) + '...'
+      : attribution.paperTitle
+    : null;
+
   return (
     <button
       onClick={() => onNavigate(attribution.paperId, attribution.pageNumber)}
@@ -17,6 +23,11 @@ export function CitationBadge({ attribution, onNavigate }: CitationBadgeProps) {
       className="inline-flex items-center gap-1.5 px-2 py-0.5 my-1 mr-1.5 rounded text-[11px] font-mono bg-zinc-800/90 hover:bg-zinc-700/80 text-zinc-200 border border-zinc-700/60 transition-all hover:border-zinc-500 hover:text-white group cursor-pointer shadow-sm"
     >
       <BookOpen className="w-3 h-3 text-zinc-400 group-hover:text-zinc-200" />
+      {displayTitle && (
+        <span className="text-zinc-400 group-hover:text-zinc-300">
+          {displayTitle} ·
+        </span>
+      )}
       <span className="font-semibold text-zinc-300 group-hover:text-white">
         {attribution.sectionTitle}
       </span>

@@ -99,4 +99,86 @@ On the WMT 2014 English-to-German translation task, the Transformer achieves 28.
       fullResponse.toLowerCase().includes('not mentioned')
     ).toBe(true);
   });
+
+  describe('Cross-Paper Comparative Synthesis Seam (Ticket 05)', () => {
+    it('should stream comparative synthesis across multiple papers in a Collection with multi-paper attributions', async () => {
+      const { collectionStore } = await import('./services/collectionStore.js');
+      const app = createApp();
+
+      const paper1: Paper = {
+        id: 'paper-comp-transformer',
+        title: 'Transformer Translation',
+        authors: ['Vaswani'],
+        pageCount: 5,
+        filePath: '/tmp/p1.pdf',
+        createdAt: new Date().toISOString(),
+      };
+      const paper2: Paper = {
+        id: 'paper-comp-bert',
+        title: 'BERT Language Model',
+        authors: ['Devlin'],
+        pageCount: 8,
+        filePath: '/tmp/p2.pdf',
+        createdAt: new Date().toISOString(),
+      };
+      const paperUnrelated: Paper = {
+        id: 'paper-unrelated',
+        title: 'Unrelated Paper',
+        authors: ['Anonymous'],
+        pageCount: 3,
+        filePath: '/tmp/p3.pdf',
+        createdAt: new Date().toISOString(),
+      };
+
+      const md1 = `# Transformer Translation
+## Architecture & Results
+[PAGE 2]
+The Transformer translation model reaches a benchmark score of 28.4 BLEU using multi-head attention.`;
+      const md2 = `# BERT Language Model
+## Architecture & Results
+[PAGE 4]
+The BERT language model achieves a benchmark score of 80.5 GLUE using masked bidirectional pre-training.`;
+      const mdUnrelated = `# Unrelated
+## Architecture & Results
+Architecture benchmark score benchmark score benchmark score.`;
+
+      await retrievalService.indexChunks([
+        ...chunkPaperBySections(paper1, md1),
+        ...chunkPaperBySections(paper2, md2),
+        ...chunkPaperBySections(paperUnrelated, mdUnrelated),
+      ]);
+
+      const collection = collectionStore.createCollection({
+        name: 'NLP Benchmarks Collection',
+        paperIds: [paper1.id, paper2.id],
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({
+          query: 'Compare the architecture and benchmark score of Transformer vs BERT',
+          collectionId: collection.id,
+        })
+        .expect(200);
+
+      const rawText = response.text;
+      const lines = rawText.split('\n\n').filter((l) => l.startsWith('data:'));
+      const payloads = lines
+        .map((l) => l.replace(/^data:\s*/, ''))
+        .filter((l) => l !== '[DONE]')
+        .map((l) => JSON.parse(l));
+
+      const attributions = payloads.filter((p) => p.attributions).flatMap((p) => p.attributions);
+      const citedPaperIds = new Set(attributions.map((a: any) => a.paperId));
+
+      // Must cite BOTH papers in the collection
+      expect(citedPaperIds.has(paper1.id)).toBe(true);
+      expect(citedPaperIds.has(paper2.id)).toBe(true);
+      // Must NOT cite unrelated paper outside the collection
+      expect(citedPaperIds.has(paperUnrelated.id)).toBe(false);
+
+      const fullResponse = payloads.filter((p) => p.token).map((p) => p.token).join('');
+      expect(fullResponse.length).toBeGreaterThan(0);
+    });
+  });
 });

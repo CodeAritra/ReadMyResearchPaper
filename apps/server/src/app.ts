@@ -4,9 +4,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { QueryRequest } from '@research-qna/types';
+import { QueryRequest, EvidenceChunk } from '@research-qna/types';
 import { jobManager } from './services/jobManager.js';
 import { paperStore } from './services/paperStore.js';
+import { collectionStore } from './services/collectionStore.js';
 import { extractDocumentStructure } from './services/extraction.js';
 import { chunkPaperBySections, retrievalService } from './services/retrieval.js';
 import { streamGroundedSynthesis } from './services/synthesis.js';
@@ -137,19 +138,87 @@ export function createApp(): express.Application {
     res.json(paperStore.listPapers());
   });
 
+  // Collection Management Endpoints
+  app.post('/api/collections', (req: Request, res: Response): void => {
+    const { name, description, paperIds } = req.body || {};
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      res.status(400).json({ error: 'Collection name is required and must be non-empty' });
+      return;
+    }
+
+    const collection = collectionStore.createCollection({
+      name,
+      description,
+      paperIds: Array.isArray(paperIds) ? paperIds : [],
+    });
+
+    res.status(201).json(collection);
+  });
+
+  app.get('/api/collections', (_req: Request, res: Response): void => {
+    res.json(collectionStore.listCollections());
+  });
+
+  app.get('/api/collections/:id', (req: Request, res: Response): void => {
+    const collection = collectionStore.getCollection(req.params.id);
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+    res.json(collection);
+  });
+
+  app.patch('/api/collections/:id', (req: Request, res: Response): void => {
+    const { name, description, paperIds } = req.body || {};
+    const updated = collectionStore.updateCollection(req.params.id, {
+      name,
+      description,
+      paperIds,
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    res.json(updated);
+  });
+
+  app.delete('/api/collections/:id', (req: Request, res: Response): void => {
+    const deleted = collectionStore.deleteCollection(req.params.id);
+    if (!deleted) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    res.status(204).send();
+  });
+
   // Evidence Chunk Search Endpoint (Hybrid Retrieval Seam)
   app.post('/api/search', async (req: Request, res: Response): Promise<void> => {
-    const { query, paperId, limit } = req.body;
+    const { query, paperId, collectionId, limit } = req.body;
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
       res.status(400).json({ error: 'query is required and must be a non-empty string' });
       return;
     }
 
-    const results = await retrievalService.search(query, {
-      paperId,
-      limit: typeof limit === 'number' ? limit : 5,
-    });
+    const maxLimit = typeof limit === 'number' ? limit : 5;
+    let results: EvidenceChunk[] = [];
+
+    if (collectionId) {
+      const collection = collectionStore.getCollection(collectionId);
+      if (collection && collection.paperIds.length > 0) {
+        results = await retrievalService.searchPartitioned(query, collection.paperIds, Math.max(1, Math.floor(maxLimit / collection.paperIds.length)));
+      } else {
+        results = [];
+      }
+    } else {
+      results = await retrievalService.search(query, {
+        paperId,
+        limit: maxLimit,
+      });
+    }
 
     res.json({ results });
   });
@@ -171,6 +240,7 @@ export function createApp(): express.Application {
     await streamGroundedSynthesis(res, {
       query: body.query.trim(),
       paperId: body.paperId,
+      collectionId: body.collectionId,
       history: body.history,
     });
   });

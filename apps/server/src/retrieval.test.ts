@@ -91,4 +91,55 @@ On the WMT 2014 English-to-German translation task, the big transformer model ac
       .send({})
       .expect(400);
   });
+
+  describe('Partitioned Cross-Paper Retrieval Seam (Ticket 05)', () => {
+    const paperA: Paper = {
+      id: 'paper-a-transformer',
+      title: 'Attention Is All You Need',
+      authors: ['Vaswani et al.'],
+      year: 2017,
+      pageCount: 1,
+      filePath: '/tmp/paper-a.pdf',
+      createdAt: new Date().toISOString(),
+    };
+
+    const paperB: Paper = {
+      id: 'paper-b-bert',
+      title: 'BERT: Pre-training of Deep Bidirectional Transformers',
+      authors: ['Devlin et al.'],
+      year: 2018,
+      pageCount: 1,
+      filePath: '/tmp/paper-b.pdf',
+      createdAt: new Date().toISOString(),
+    };
+
+    const paperAMarkdown = `# Attention Is All You Need
+## Architecture & Benchmark
+The Transformer model architecture relies on multi-head attention mechanisms and self-attention layers. On benchmark translation tasks it reaches state-of-the-art accuracy.`;
+
+    const paperBMarkdown = `# BERT: Pre-training of Deep Bidirectional Transformers
+## Architecture & Benchmark
+The BERT model architecture uses bidirectional representations from unlabeled text. On GLUE benchmark evaluation it establishes superior accuracy.`;
+
+    it('should balance chunk representation across all papers using searchPartitioned', async () => {
+      const chunksA = chunkPaperBySections(paperA, paperAMarkdown);
+      const chunksB = chunkPaperBySections(paperB, paperBMarkdown);
+      await retrievalService.indexChunks([...chunksA, ...chunksB]);
+
+      const results = await retrievalService.searchPartitioned(
+        'What are the architecture mechanisms and benchmark evaluations?',
+        [paperA.id, paperB.id],
+        2
+      );
+
+      const returnedPaperIds = new Set(results.map((r) => r.paperId));
+      expect(returnedPaperIds.has(paperA.id)).toBe(true);
+      expect(returnedPaperIds.has(paperB.id)).toBe(true);
+
+      const paperACount = results.filter((r) => r.paperId === paperA.id).length;
+      const paperBCount = results.filter((r) => r.paperId === paperB.id).length;
+      expect(paperACount).toBeGreaterThanOrEqual(1);
+      expect(paperBCount).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

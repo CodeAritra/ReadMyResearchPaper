@@ -1,10 +1,12 @@
 import { Attribution, EvidenceChunk } from '@research-qna/types';
 import { retrievalService } from './retrieval.js';
+import { collectionStore } from './collectionStore.js';
 import { Response } from 'express';
 
 export interface SynthesisOptions {
   query: string;
   paperId?: string;
+  collectionId?: string;
   history?: Array<{ role: string; content: string }>;
 }
 
@@ -12,13 +14,21 @@ export async function streamGroundedSynthesis(
   res: Response,
   options: SynthesisOptions
 ): Promise<void> {
-  const { query, paperId } = options;
+  const { query, paperId, collectionId } = options;
 
-  // Retrieve candidate Evidence Chunks
-  const relevantChunks = await retrievalService.search(query, {
-    paperId,
-    limit: 4,
-  });
+  // Retrieve candidate Evidence Chunks (partitioned across collection papers if collectionId provided)
+  let relevantChunks: EvidenceChunk[] = [];
+  if (collectionId) {
+    const collection = collectionStore.getCollection(collectionId);
+    if (collection && collection.paperIds.length > 0) {
+      relevantChunks = await retrievalService.searchPartitioned(query, collection.paperIds, 2);
+    }
+  } else {
+    relevantChunks = await retrievalService.search(query, {
+      paperId,
+      limit: 4,
+    });
+  }
 
   // Evaluate evidence quality: If no matches or score is zero, refuse
   const hasStrongEvidence =
@@ -40,8 +50,8 @@ export async function streamGroundedSynthesis(
     return;
   }
 
-  // Construct Attributions from top matching chunks
-  const attributions: Attribution[] = relevantChunks.slice(0, 3).map((chunk) => ({
+  // Construct Attributions ensuring balanced representation across papers
+  const attributions: Attribution[] = relevantChunks.slice(0, 6).map((chunk) => ({
     paperId: chunk.paperId,
     paperTitle: chunk.paperTitle,
     sectionTitle: chunk.sectionTitle,
@@ -68,7 +78,8 @@ export async function streamGroundedSynthesis(
         .join('\n\n---\n\n');
 
       const systemPrompt = `You are an academic research assistant. Answer the user question strictly using the provided context passages. 
-Every factual claim must cite its source in the format [Section, p. X]. 
+Every factual claim must cite its source in the format [Section, p. X] or [Paper Title · p. X]. 
+If comparing multiple papers, balance citations across each compared paper.
 If the context does not contain sufficient evidence to answer, state explicitly: "The paper does not contain sufficient evidence to answer this question."`;
 
       const stream = await model.stream([
@@ -93,14 +104,29 @@ If the context does not contain sufficient evidence to answer, state explicitly:
   }
 
   // High-performance deterministic grounded synthesizer for tests and offline local dev
-  const topChunk = relevantChunks[0];
-  const summaryTokens = [
-    `Based on `,
-    `[${topChunk.paperTitle} · p. ${topChunk.pageNumber}], `,
-    `in section "${topChunk.sectionTitle}": `,
-    topChunk.content.slice(0, 200),
-    topChunk.content.length > 200 ? '...' : '',
-  ];
+  const distinctPapers = Array.from(new Set(relevantChunks.map((c) => c.paperId)));
+  let summaryTokens: string[] = [];
+
+  if (distinctPapers.length > 1) {
+    summaryTokens.push('Comparative synthesis across papers in collection:\n\n');
+    for (const pid of distinctPapers) {
+      const chunk = relevantChunks.find((c) => c.paperId === pid);
+      if (chunk) {
+        summaryTokens.push(
+          `- [${chunk.paperTitle} · p. ${chunk.pageNumber}] (${chunk.sectionTitle}): ${chunk.content.slice(0, 150)}...\n`
+        );
+      }
+    }
+  } else {
+    const topChunk = relevantChunks[0];
+    summaryTokens = [
+      `Based on `,
+      `[${topChunk.paperTitle} · p. ${topChunk.pageNumber}], `,
+      `in section "${topChunk.sectionTitle}": `,
+      topChunk.content.slice(0, 200),
+      topChunk.content.length > 200 ? '...' : '',
+    ];
+  }
 
   for (const token of summaryTokens) {
     res.write(`data: ${JSON.stringify({ token })}\n\n`);

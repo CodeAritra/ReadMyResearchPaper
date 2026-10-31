@@ -1,0 +1,14 @@
+node_modules
+*/node_modules
+.git
+.gitignore
+.next
+dist
+.scratch
+.agents
+uploads/*.pdf
+*.log
+.env
+.env.local
+.DS_Store
+Thumbs.db

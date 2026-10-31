@@ -4,10 +4,10 @@
 
 **Blocked by:** 05: Collection Workspaces & Partitioned Cross-Paper Comparative Synthesis, 06: Agentic Tool-Calling Seam for Future Academic Search (ArXiv / Web)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Production multi-stage `Dockerfile` is created for `apps/server` (Express RAG API).
-- [ ] Production multi-stage `Dockerfile` is created for `apps/web` (Next.js standalone build).
-- [ ] Root `docker-compose.yml` orchestrates the client and server services with environment variable passthrough.
-- [ ] `.dockerignore` excludes unnecessary development dependencies, git metadata, and local scratch files.
-- [ ] End-to-end containerized run builds and executes successfully with verified health checks.
+- [x] Production multi-stage `Dockerfile` is created for `apps/server` (Express RAG API).
+- [x] Production multi-stage `Dockerfile` is created for `apps/web` (Next.js standalone build).
+- [x] Root `docker-compose.yml` orchestrates the client and server services with environment variable passthrough.
+- [x] `.dockerignore` excludes unnecessary development dependencies, git metadata, and local scratch files.
+- [x] End-to-end containerized run builds and executes successfully with verified health checks.

@@ -17,7 +17,7 @@ import {
 import { UploadPaperDialog } from '@/components/UploadPaperDialog';
 import { DocumentReader } from '@/components/DocumentReader';
 import { CitationBadge } from '@/components/CitationBadge';
-import { TutorialTour } from '@/components/TutorialTour';
+import { TutorialTour, runInteractiveTour } from '@/components/TutorialTour';
 import { Attribution, Collection } from '@research-qna/types';
 
 interface Message {
@@ -105,7 +105,6 @@ export default function WorkbenchPage() {
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
-  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const [activePage, setActivePage] = useState(1);
   const [messages, setMessages] = useState<Message[]>([
@@ -134,13 +133,8 @@ export default function WorkbenchPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Check first-time visitor for tutorial tour and load seeded paper
+  // Load seeded paper on mount
   useEffect(() => {
-    const hasSeenTour = localStorage.getItem('research_qna_tutorial_seen');
-    if (!hasSeenTour) {
-      setIsTourOpen(true);
-    }
-
     // Fetch live seeded paper with complete markdown from Express API
     fetch('http://localhost:3001/api/papers/paper-attention')
       .then((res) => (res.ok ? res.json() : null))
@@ -384,8 +378,8 @@ export default function WorkbenchPage() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#090a0f] text-zinc-100 antialiased font-sans">
-      {/* Tutorial Overlay */}
-      <TutorialTour isOpen={isTourOpen} onClose={() => setIsTourOpen(false)} />
+      {/* Interactive Driver.js Tutorial Tour */}
+      <TutorialTour autoStart />
 
       {/* Sidebar: Navigation & Collections */}
       <aside className="w-64 border-r border-zinc-800 bg-[#0d0f14] flex flex-col justify-between p-4 shrink-0">
@@ -537,7 +531,7 @@ export default function WorkbenchPage() {
         {/* Sidebar Footer */}
         <div className="border-t border-zinc-800/80 pt-3 space-y-2 shrink-0">
           <button
-            onClick={() => setIsTourOpen(true)}
+            onClick={() => runInteractiveTour()}
             className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[11px] font-mono text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
           >
             <span className="flex items-center gap-1.5">
@@ -639,6 +633,7 @@ export default function WorkbenchPage() {
 
           {/* Input Box */}
           <form
+            id="tour-input-box"
             onSubmit={handleSubmit}
             className="p-3 border-t border-zinc-800 bg-[#0d0f14] flex items-center gap-2"
           >

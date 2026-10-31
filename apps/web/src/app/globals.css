@@ -33,3 +33,99 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #2e3646;
 }
+
+/* Custom Minimalist Academic Theme for Driver.js Tour */
+.driver-popover.academic-tour-theme {
+  background-color: #111318;
+  color: #f4f4f5;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  padding: 16px;
+  min-width: 290px;
+  max-width: 340px;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f4f4f5;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a1a1aa;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-close-btn {
+  color: #71717a;
+  font-size: 18px;
+  top: 12px;
+  right: 12px;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-close-btn:hover {
+  color: #f4f4f5;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #27272a;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-progress-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  color: #71717a;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-footer-btn {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 4px 10px;
+  transition: all 0.15s ease;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-prev-btn {
+  background-color: transparent;
+  color: #a1a1aa;
+  border: 1px solid #27272a;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-prev-btn:hover {
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-next-btn {
+  background-color: #f4f4f5;
+  color: #090a0f;
+  font-weight: 600;
+  border: 1px solid #f4f4f5;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-next-btn:hover {
+  background-color: #ffffff;
+}
+
+/* Arrow styling */
+.driver-popover.academic-tour-theme .driver-popover-arrow-side-left {
+  border-left-color: #111318;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-arrow-side-right {
+  border-right-color: #111318;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-arrow-side-top {
+  border-top-color: #111318;
+}
+
+.driver-popover.academic-tour-theme .driver-popover-arrow-side-bottom {
+  border-bottom-color: #111318;
+}

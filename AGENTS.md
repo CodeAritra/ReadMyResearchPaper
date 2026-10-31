@@ -24,10 +24,17 @@ Design for an academic researcher, not a generic chatbot showcase:
 - **Component Architecture**: Use **shadcn/ui** patterns in `apps/web` (Radix UI primitives + Tailwind CSS). Keep components modular inside `src/components/ui/` with zero runtime CSS-in-JS overhead.
 - **Frontend Design Principles**: Prioritize high signal-to-noise ratio, information density, and functional minimalism. Make layout and interactive states instantly legible.
 - **Palette**: Clean monochromatic neutrals (slate/zinc/gray) with high-contrast text. Muted indigo/blue for interactive citation links. No multi-colored decorative gradients, floating sparkler icons, or AI gimmick animations.
-- **Layout**: Two-pane workbench. Left pane hosts the primary document reader (PDF canvas with zoom and page navigation). Right pane hosts the collapsible discussion and attribution inspector. Fully responsive with mobile drawer fallback.
-- **Typography**: Clean, readable sans-serif (Inter or system stack) with monospace for formulas, metrics, and dataset identifiers.
-- **Interactive Citations**: Every claim citing a source renders as a clickable `Citation Anchor` badge (e.g. `[Paper A · p. 4]`) that smoothly scrolls and highlights the referenced page in the viewer.
+- **Layout & Drag Resizing**: Two-pane workbench with collapsible sidebar and discussion box. Draggable pane dividers must toggle `transition-none` during active drag and synchronize updates via `requestAnimationFrame` for latency-free 60fps tracking.
+- **Document Viewing**: Dual view modes supported in `DocumentReader`: **Section View** (semantic section stepper and dropdown) and **Whole Document** (continuous reading canvas).
+- **Academic Markdown & Math**: Always render paper extracts, tables, and AI messages using `MarkdownRenderer` with `remark-gfm` and `rehype-katex` (KaTeX styling globally imported). Never output unparsed raw text with `whitespace-pre-wrap`. Ensure GFM tables have preceding blank lines and formulas support `$$`, `$`, `\[...\]`, and `\(...\)`.
+- **Interactive Citations**: Every claim citing a source renders as a clickable `Citation Anchor` badge (e.g. `[Paper A · p. 4]`) that smoothly scrolls and highlights the referenced page/section in the viewer.
 - **Latency & Streaming**: Always stream model tokens to the client over Server-Sent Events (SSE) for sub-second first-token response.
+
+## Development & Execution Workflows
+
+- **Concurrent Execution**: Run `npm run dev` at the repository root to start both `apps/web` (port 3000) and `apps/server` (port 3001) simultaneously via `concurrently`.
+- **First-Time User Walkthrough**: Onboarding guided tour is provided by `driver.js` with academic monochromatic popover themes anchored to key UI targets.
+- **Seeded Manuscript**: The authentic *Attention Is All You Need* (Vaswani et al.) manuscript is pre-loaded into `apps/server/uploads/` and indexed into the retrieval service for immediate local testing.
 
 ## Deployment & Dockerization Rules
 

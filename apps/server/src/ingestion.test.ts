@@ -55,6 +55,31 @@ describe('Document Ingestion API Seam', () => {
     expect(paperResponse.body.sections.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('should detect duplicate uploads of the same PDF file and reuse existing paper without re-indexing', async () => {
+    const app = createApp();
+
+    const samplePdfBuffer = Buffer.from(
+      '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000010 00000 n \n0000000060 00000 n \n0000000117 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n168\n%%EOF'
+    );
+
+    // Initial upload
+    const firstUpload = await request(app)
+      .post('/api/papers/upload')
+      .attach('file', samplePdfBuffer, 'paper-dedup.pdf');
+
+    const firstPaperId = firstUpload.body.paperId;
+
+    // Second upload of the EXACT same bytes
+    const duplicateUpload = await request(app)
+      .post('/api/papers/upload')
+      .attach('file', samplePdfBuffer, 'paper-dedup-duplicate.pdf')
+      .expect(200);
+
+    expect(duplicateUpload.body.duplicate).toBe(true);
+    expect(duplicateUpload.body.paperId).toBe(firstPaperId);
+    expect(duplicateUpload.body.status).toBe('completed');
+  });
+
   it('should return 400 Bad Request when no file is uploaded', async () => {
     const app = createApp();
 

@@ -291,17 +291,41 @@ export default function WorkbenchPage() {
         const paper = await res.json();
         setActivePaper(paper);
         setActivePage(1);
+        if (paper.sections && paper.sections.length > 0) {
+          setSelectedSectionTitle(paper.sections[0].title);
+        }
 
         if (activeCollectionId) {
           await handleAddActivePaperToCollection(activeCollectionId);
         }
 
-        setMessages((prev) => [
-          ...prev,
+        const authorsText =
+          paper.authors && paper.authors.length > 0
+            ? ` (${paper.authors.slice(0, 3).join(', ')}${paper.authors.length > 3 ? ' et al.' : ''})`
+            : '';
+
+        setMessages([
           {
-            id: `sys-${Date.now()}`,
+            id: `welcome-${paper.id}`,
             role: 'assistant',
-            content: `Ingested "${paper.title}" (${paper.pageCount} pages, ${paper.sections.length} structural sections). You can now ask questions with verifiable citations.`,
+            content: `Ingested "${paper.title}"${authorsText} (${paper.pageCount} page${
+              paper.pageCount === 1 ? '' : 's'
+            }, ${paper.sections.length} structural section${
+              paper.sections.length === 1 ? '' : 's'
+            }). You can now ask questions about this paper with verifiable citations.`,
+            attributions:
+              paper.sections && paper.sections.length > 0
+                ? [
+                    {
+                      paperId: paper.id,
+                      paperTitle: paper.title,
+                      sectionTitle: paper.sections[0].title,
+                      pageNumber: paper.sections[0].pageNumber,
+                      sourceType: 'uploaded_paper',
+                    },
+                  ]
+                : undefined,
+            toolUsed: 'search_uploaded_papers',
           },
         ]);
       }
@@ -665,6 +689,7 @@ export default function WorkbenchPage() {
         {/* Left Pane: Interactive Document Canvas */}
         <section id="tour-document-reader" className="flex-1 bg-[#090a0f] flex flex-col overflow-hidden">
           <DocumentReader
+            paperId={activePaper.id}
             paperTitle={activePaper.title}
             authors={activePaper.authors}
             pageCount={activePaper.pageCount}

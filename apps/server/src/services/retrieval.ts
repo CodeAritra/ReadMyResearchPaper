@@ -14,16 +14,49 @@ export function chunkPaperBySections(paper: Paper, markdown: string): EvidenceCh
   const flushChunk = () => {
     const text = currentContent.join('\n').trim();
     if (text.length > 0) {
-      chunks.push({
-        id: `chunk-${paper.id}-${chunkIndex}`,
-        paperId: paper.id,
-        paperTitle: paper.title,
-        sectionTitle: currentSection,
-        pageNumber: currentPage,
-        chunkIndex,
-        content: text,
-      });
-      chunkIndex++;
+      if (text.length > 2500) {
+        const paragraphs = text.split(/\n\s*\n/);
+        let subBuffer: string[] = [];
+        let subLen = 0;
+        for (const para of paragraphs) {
+          if (subLen + para.length > 2000 && subBuffer.length > 0) {
+            chunks.push({
+              id: `chunk-${paper.id}-${chunkIndex++}`,
+              paperId: paper.id,
+              paperTitle: paper.title,
+              sectionTitle: currentSection,
+              pageNumber: currentPage,
+              chunkIndex,
+              content: subBuffer.join('\n\n').trim(),
+            });
+            subBuffer = [];
+            subLen = 0;
+          }
+          subBuffer.push(para);
+          subLen += para.length;
+        }
+        if (subBuffer.length > 0) {
+          chunks.push({
+            id: `chunk-${paper.id}-${chunkIndex++}`,
+            paperId: paper.id,
+            paperTitle: paper.title,
+            sectionTitle: currentSection,
+            pageNumber: currentPage,
+            chunkIndex,
+            content: subBuffer.join('\n\n').trim(),
+          });
+        }
+      } else {
+        chunks.push({
+          id: `chunk-${paper.id}-${chunkIndex++}`,
+          paperId: paper.id,
+          paperTitle: paper.title,
+          sectionTitle: currentSection,
+          pageNumber: currentPage,
+          chunkIndex,
+          content: text,
+        });
+      }
     }
     currentContent = [];
   };
@@ -69,25 +102,133 @@ export class RetrievalService {
   private indexedChunks: EvidenceChunk[] = [];
   private qdrantClient: QdrantClient | null = null;
   private qdrantCollection = 'research_paper_chunks';
+  private collectionInitialized = false;
 
   constructor() {
-    if (process.env.QDRANT_URL) {
+    this.getQdrantClient();
+  }
+
+  private getQdrantClient(): QdrantClient | null {
+    if (!this.qdrantClient && process.env.QDRANT_URL) {
       try {
         this.qdrantClient = new QdrantClient({
           url: process.env.QDRANT_URL,
           apiKey: process.env.QDRANT_API_KEY,
+          checkCompatibility: false,
         });
       } catch (err) {
         console.warn('[RetrievalService] Failed to initialize QdrantClient:', err);
       }
     }
+    return this.qdrantClient;
+  }
+
+  private async ensureQdrantCollection(): Promise<void> {
+    const client = this.getQdrantClient();
+    if (!client || this.collectionInitialized) return;
+    try {
+      const exists = await client.collectionExists(this.qdrantCollection);
+      if (!exists.exists) {
+        await client.createCollection(this.qdrantCollection, {
+          vectors: {
+            size: 3072,
+            distance: 'Cosine',
+          },
+        });
+      }
+
+      // Ensure keyword payload indexes for exact filtering and deduplication
+      try {
+        await client.createPayloadIndex(this.qdrantCollection, {
+          field_name: 'paperId',
+          field_schema: 'keyword',
+          wait: true,
+        });
+        await client.createPayloadIndex(this.qdrantCollection, {
+          field_name: 'paperTitle',
+          field_schema: 'keyword',
+          wait: true,
+        });
+      } catch {
+        // Indexes may already exist
+      }
+
+      this.collectionInitialized = true;
+    } catch (err) {
+      console.warn('[RetrievalService] Could not ensure Qdrant collection:', err);
+    }
+  }
+
+  private generateDeterministicPointId(paperId: string, chunkIndex: number): string {
+    const hash = crypto.createHash('md5').update(`${paperId}:${chunkIndex}`).digest('hex');
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
   }
 
   async indexChunks(chunks: EvidenceChunk[]): Promise<void> {
-    // Deduplicate / replace existing chunks for same paper
+    // 1. Maintain local in-memory candidate store
     const paperIds = new Set(chunks.map((c) => c.paperId));
     this.indexedChunks = this.indexedChunks.filter((c) => !paperIds.has(c.paperId));
     this.indexedChunks.push(...chunks);
+
+    // 2. Index into Qdrant Cloud when credentials are available
+    const client = this.getQdrantClient();
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (client && apiKey && chunks.length > 0) {
+      try {
+        await this.ensureQdrantCollection();
+        const { GoogleGenerativeAIEmbeddings } = await import('@langchain/google-genai');
+        const embeddings = new GoogleGenerativeAIEmbeddings({
+          apiKey,
+          model: 'gemini-embedding-001',
+        });
+
+        // Deduplication: Remove any pre-existing points for this paperId before upserting
+        const targetPaperId = chunks[0]?.paperId;
+        if (targetPaperId) {
+          try {
+            await client.delete(this.qdrantCollection, {
+              wait: true,
+              filter: {
+                must: [{ key: 'paperId', match: { value: targetPaperId } }],
+              },
+            });
+          } catch {
+            // Ignore if no points matched
+          }
+        }
+
+        // Batch embed chunks
+        const texts = chunks.map((c) => `${c.paperTitle} - ${c.sectionTitle}\n${c.content}`);
+        const vectors = await embeddings.embedDocuments(texts);
+
+        const points = chunks.map((chunk, idx) => ({
+          id: this.generateDeterministicPointId(chunk.paperId, chunk.chunkIndex),
+          vector: vectors[idx],
+          payload: {
+            paperId: chunk.paperId,
+            paperTitle: chunk.paperTitle,
+            sectionTitle: chunk.sectionTitle,
+            pageNumber: chunk.pageNumber,
+            chunkIndex: chunk.chunkIndex,
+            content: chunk.content,
+          },
+        }));
+
+        // Upsert in batches of 50
+        const batchSize = 50;
+        for (let i = 0; i < points.length; i += batchSize) {
+          const batch = points.slice(i, i + batchSize);
+          await client.upsert(this.qdrantCollection, {
+            wait: true,
+            points: batch,
+          });
+        }
+        console.log(`[RetrievalService] Indexed ${points.length} chunks for "${chunks[0]?.paperTitle}" into Qdrant Cloud collection "${this.qdrantCollection}"`);
+      } catch (err) {
+        console.warn('[RetrievalService] Qdrant Cloud indexing failed, relying on local index:', err);
+      }
+    }
   }
 
   async search(
@@ -95,6 +236,61 @@ export class RetrievalService {
     options?: { paperId?: string; limit?: number }
   ): Promise<EvidenceChunk[]> {
     const limit = options?.limit ?? 5;
+
+    // 1. Attempt vector search via Qdrant Cloud if available
+    const client = this.getQdrantClient();
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (client && apiKey) {
+      try {
+        await this.ensureQdrantCollection();
+        const { GoogleGenerativeAIEmbeddings } = await import('@langchain/google-genai');
+        const embeddings = new GoogleGenerativeAIEmbeddings({
+          apiKey,
+          model: 'gemini-embedding-001',
+        });
+
+        const queryVec = await embeddings.embedQuery(query);
+        const filter = options?.paperId
+          ? {
+              must: [
+                {
+                  key: 'paperId',
+                  match: { value: options.paperId },
+                },
+              ],
+            }
+          : undefined;
+
+        const res = await client.query(this.qdrantCollection, {
+          query: queryVec,
+          filter,
+          limit,
+          with_payload: true,
+        });
+
+        if (res.points && res.points.length > 0) {
+          const qdrantResults: EvidenceChunk[] = res.points.map((pt) => {
+            const p = (pt.payload || {}) as any;
+            return {
+              id: String(pt.id),
+              paperId: p.paperId || '',
+              paperTitle: p.paperTitle || '',
+              sectionTitle: p.sectionTitle || '',
+              pageNumber: p.pageNumber || 1,
+              chunkIndex: p.chunkIndex || 0,
+              content: p.content || '',
+              score: pt.score ?? 0,
+            };
+          });
+          return qdrantResults;
+        }
+      } catch (err) {
+        console.warn('[RetrievalService] Qdrant search failed, falling back to local hybrid search:', err);
+      }
+    }
+
+    // 2. Local fallback BM25 keyword search
     const stopWords = new Set([
       'what', 'is', 'the', 'in', 'of', 'and', 'to', 'a', 'an', 'for', 'on', 'with', 'as',
       'by', 'at', 'from', 'this', 'that', 'these', 'those', 'it', 'its', 'paper', 'according',
@@ -176,6 +372,69 @@ export class RetrievalService {
 
   getChunksForPaper(paperId: string): EvidenceChunk[] {
     return this.indexedChunks.filter((c) => c.paperId === paperId);
+  }
+
+  async getStats(): Promise<{
+    collection: string;
+    totalPoints: number;
+    totalPdfs: number;
+    papers: Array<{ paperId: string; paperTitle: string; chunks: number }>;
+  }> {
+    const client = this.getQdrantClient();
+    if (!client) {
+      const distinctPaperIds = Array.from(new Set(this.indexedChunks.map((c) => c.paperId)));
+      return {
+        collection: 'local_in_memory',
+        totalPoints: this.indexedChunks.length,
+        totalPdfs: distinctPaperIds.length,
+        papers: distinctPaperIds.map((pid) => {
+          const matching = this.indexedChunks.filter((c) => c.paperId === pid);
+          return {
+            paperId: pid,
+            paperTitle: matching[0]?.paperTitle || 'Unknown',
+            chunks: matching.length,
+          };
+        }),
+      };
+    }
+
+    try {
+      await this.ensureQdrantCollection();
+      const info = await client.getCollection(this.qdrantCollection);
+      const scroll = await client.scroll(this.qdrantCollection, {
+        limit: 1000,
+        with_payload: true,
+      });
+
+      const paperMap = new Map<string, { paperId: string; paperTitle: string; chunks: number }>();
+      for (const pt of scroll.points) {
+        const p = (pt.payload || {}) as any;
+        const pid = p.paperId || 'unknown';
+        if (!paperMap.has(pid)) {
+          paperMap.set(pid, {
+            paperId: pid,
+            paperTitle: p.paperTitle || 'Unknown',
+            chunks: 0,
+          });
+        }
+        paperMap.get(pid)!.chunks++;
+      }
+
+      return {
+        collection: this.qdrantCollection,
+        totalPoints: info.points_count ?? scroll.points.length,
+        totalPdfs: paperMap.size,
+        papers: Array.from(paperMap.values()),
+      };
+    } catch (err: any) {
+      console.warn('[RetrievalService] Failed to fetch Qdrant stats:', err);
+      return {
+        collection: this.qdrantCollection,
+        totalPoints: 0,
+        totalPdfs: 0,
+        papers: [],
+      };
+    }
   }
 }
 

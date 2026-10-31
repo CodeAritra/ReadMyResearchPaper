@@ -106,9 +106,10 @@ export async function streamGroundedSynthesis(
   if (apiKey) {
     try {
       const { ChatGoogleGenerativeAI } = await import('@langchain/google-genai');
+      const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
       const model = new ChatGoogleGenerativeAI({
         apiKey,
-        model: 'gemini-2.0-flash',
+        model: geminiModel,
         temperature: 0.1,
       });
 

@@ -1,4 +1,6 @@
 import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import { StoredPaper, paperStore } from './paperStore.js';
 import { chunkPaperBySections, retrievalService } from './retrieval.js';
 
@@ -166,6 +168,9 @@ export function seedAttentionPaper(): StoredPaper {
       { title: '7 Conclusion', pageNumber: 10 },
     ],
     rawMarkdown: ATTENTION_RAW_MARKDOWN,
+    fileHash: fs.existsSync(filePath)
+      ? crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
+      : undefined,
   };
 
   // Persist into paper store

@@ -23,7 +23,7 @@ class JobManager {
     return this.jobs.get(jobId);
   }
 
-  updateJob(jobId: string, updates: Partial<Omit<IngestionJob, 'jobId' | 'paperId' | 'createdAt'>>): IngestionJob | undefined {
+  updateJob(jobId: string, updates: Partial<Omit<IngestionJob, 'jobId' | 'createdAt'>>): IngestionJob | undefined {
     const job = this.jobs.get(jobId);
     if (!job) return undefined;
 

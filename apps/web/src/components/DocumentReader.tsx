@@ -1,20 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  ZoomIn,
-  ZoomOut,
   FileText,
-  Layers,
   PanelLeftOpen,
   PanelRightOpen,
-  LayoutList,
-  ScrollText,
+  ExternalLink,
+  RotateCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 
 export interface PaperSection {
   title: string;
@@ -28,10 +24,11 @@ export interface ParsedSection {
 }
 
 interface DocumentReaderProps {
+  paperId?: string;
   paperTitle: string;
   authors: string[];
   pageCount: number;
-  sections: PaperSection[];
+  sections?: PaperSection[];
   rawMarkdown?: string;
   activePage: number;
   onPageChange: (newPage: number) => void;
@@ -43,172 +40,46 @@ interface DocumentReaderProps {
   onToggleAiBox?: () => void;
 }
 
-export function parseDocumentSections(
-  rawMarkdown?: string,
-  fallbackSections?: PaperSection[]
-): ParsedSection[] {
-  if (!rawMarkdown) {
-    return (fallbackSections || []).map((s) => ({
-      title: s.title,
-      pageNumber: s.pageNumber,
-      content: 'Section content extracted and indexed in Qdrant.',
-    }));
-  }
-
-  const lines = rawMarkdown.split('\n');
-  const parsed: ParsedSection[] = [];
-  let currentTitle = 'Document Overview';
-  let currentPage = 1;
-  let currentLines: string[] = [];
-
-  const flush = () => {
-    const text = currentLines.join('\n').trim();
-    if (text.length > 0 || parsed.length === 0) {
-      parsed.push({
-        title: currentTitle,
-        pageNumber: currentPage,
-        content: text || 'No section text available.',
-      });
-    }
-    currentLines = [];
-  };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Page indicator
-    const pageMatch = trimmed.match(/\[PAGE\s+(\d+)\]/i);
-    if (pageMatch) {
-      currentPage = parseInt(pageMatch[1], 10);
-      continue;
-    }
-
-    // Heading indicator (# or ## or ###)
-    if (trimmed.startsWith('#')) {
-      const heading = trimmed.replace(/^#+\s*/, '').trim();
-      flush();
-      currentTitle = heading;
-      continue;
-    }
-
-    currentLines.push(line);
-  }
-
-  flush();
-
-  return parsed.length > 0
-    ? parsed
-    : [
-        {
-          title: 'Full Document',
-          pageNumber: 1,
-          content: rawMarkdown.trim(),
-        },
-      ];
-}
-
 export function DocumentReader({
+  paperId = 'paper-attention',
   paperTitle,
-  authors,
   pageCount,
-  sections,
-  rawMarkdown,
   activePage,
   onPageChange,
-  selectedSectionTitle,
-  onSelectSection,
   isSidebarCollapsed = false,
   onToggleSidebar,
   isAiBoxCollapsed = false,
   onToggleAiBox,
 }: DocumentReaderProps) {
-  const [zoomLevel, setZoomLevel] = useState(100);
-  const [highlightFlash, setHighlightFlash] = useState(false);
-  const [viewMode, setViewMode] = useState<'section' | 'full'>('section');
-  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
-  const fullDocumentContainerRef = useRef<HTMLDivElement>(null);
+  const [iframeKey, setIframeKey] = useState(0);
+  const [isPdfLoading, setIsPdfLoading] = useState(true);
 
-  // Parse markdown into distinct logical sections
-  const parsedSections = useMemo(
-    () => parseDocumentSections(rawMarkdown, sections),
-    [rawMarkdown, sections]
-  );
-
-  // Sync active section when activePage or selectedSectionTitle changes
-  useEffect(() => {
-    if (selectedSectionTitle) {
-      const foundIdx = parsedSections.findIndex(
-        (s) =>
-          s.title.toLowerCase().includes(selectedSectionTitle.toLowerCase()) ||
-          selectedSectionTitle.toLowerCase().includes(s.title.toLowerCase())
-      );
-      if (foundIdx !== -1) {
-        setActiveSectionIndex(foundIdx);
-        return;
-      }
-    }
-
-    // Match by pageNumber
-    const foundIdxByPage = parsedSections.findIndex((s) => s.pageNumber === activePage);
-    if (foundIdxByPage !== -1) {
-      setActiveSectionIndex(foundIdxByPage);
-    }
-  }, [activePage, selectedSectionTitle, parsedSections]);
+  const basePdfUrl = `http://localhost:3001/api/papers/${paperId}/pdf`;
+  const pdfViewerUrl = `${basePdfUrl}#page=${activePage}&view=FitH`;
 
   useEffect(() => {
-    setHighlightFlash(true);
-    const timer = setTimeout(() => setHighlightFlash(false), 1200);
-    return () => clearTimeout(timer);
-  }, [activeSectionIndex, activePage, viewMode]);
+    setIsPdfLoading(true);
+    setIframeKey((prev) => prev + 1);
+  }, [paperId]);
 
-  const handlePrevSection = () => {
-    if (activeSectionIndex > 0) {
-      const newIdx = activeSectionIndex - 1;
-      setActiveSectionIndex(newIdx);
-      const targetSec = parsedSections[newIdx];
-      onPageChange(targetSec.pageNumber);
-      onSelectSection?.(targetSec.title, targetSec.pageNumber);
+  const handlePrevPage = () => {
+    if (activePage > 1) {
+      onPageChange(activePage - 1);
     }
   };
 
-  const handleNextSection = () => {
-    if (activeSectionIndex < parsedSections.length - 1) {
-      const newIdx = activeSectionIndex + 1;
-      setActiveSectionIndex(newIdx);
-      const targetSec = parsedSections[newIdx];
-      onPageChange(targetSec.pageNumber);
-      onSelectSection?.(targetSec.title, targetSec.pageNumber);
+  const handleNextPage = () => {
+    if (activePage < pageCount) {
+      onPageChange(activePage + 1);
     }
   };
-
-  const handleSelectSectionByIndex = (index: number) => {
-    setActiveSectionIndex(index);
-    const targetSec = parsedSections[index];
-    onPageChange(targetSec.pageNumber);
-    onSelectSection?.(targetSec.title, targetSec.pageNumber);
-
-    if (viewMode === 'full') {
-      const element = document.getElementById(`section-anchor-${index}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleZoomIn = () => {
-    if (zoomLevel < 150) setZoomLevel((z) => z + 10);
-  };
-
-  const handleZoomOut = () => {
-    if (zoomLevel > 70) setZoomLevel((z) => z - 10);
-  };
-
-  const currentSection = parsedSections[activeSectionIndex] || parsedSections[0];
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#090a0f] text-zinc-100 overflow-hidden">
-      {/* Header & Section Navigation Toolbar */}
-      <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400 bg-[#0d0f14]/80 shrink-0">
-        {/* Left: Reader Title & Sidebar Toggle */}
-        <div className="flex items-center gap-2 truncate">
+      {/* Header & PDF Navigation Toolbar */}
+      <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400 bg-[#0d0f14]/90 shrink-0">
+        {/* Left: Paper Title & Sidebar Toggle */}
+        <div className="flex items-center gap-2 truncate max-w-[45%]">
           {isSidebarCollapsed && onToggleSidebar && (
             <button
               onClick={onToggleSidebar}
@@ -219,126 +90,54 @@ export function DocumentReader({
             </button>
           )}
           <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-          <span className="font-mono text-zinc-400">DOCUMENT</span>
+          <span className="font-mono text-zinc-400 shrink-0">DOCUMENT</span>
           <span className="text-zinc-600">/</span>
-          <span className="text-zinc-200 font-medium truncate max-w-xs">{paperTitle}</span>
+          <span className="text-zinc-200 font-medium truncate" title={paperTitle}>
+            {paperTitle}
+          </span>
         </div>
 
-        {/* Center: View Mode Toggle (Section Wise vs Whole Document) */}
-        <div className="flex items-center gap-1 bg-zinc-900/90 border border-zinc-800 rounded p-0.5">
-          <button
-            onClick={() => setViewMode('section')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono transition-colors ${
-              viewMode === 'section'
-                ? 'bg-zinc-800 text-zinc-100 font-semibold shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-            title="View section-by-section"
+        {/* Center: Page Navigation Controls */}
+        <div className="flex items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded px-1.5 py-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"
+            onClick={handlePrevPage}
+            disabled={activePage <= 1}
+            title="Previous Page"
           >
-            <LayoutList className="w-3 h-3" />
-            <span>Section View</span>
-          </button>
-          <button
-            onClick={() => setViewMode('full')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono transition-colors ${
-              viewMode === 'full'
-                ? 'bg-zinc-800 text-zinc-100 font-semibold shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-            title="View the whole continuous document"
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </Button>
+
+          <span className="text-[11px] font-mono text-zinc-300 px-1 min-w-[70px] text-center">
+            p. {activePage} / {Math.max(1, pageCount)}
+          </span>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"
+            onClick={handleNextPage}
+            disabled={activePage >= pageCount}
+            title="Next Page"
           >
-            <ScrollText className="w-3 h-3" />
-            <span>Whole Document</span>
-          </button>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
-        {/* Right: Section Navigation & Zoom Controls */}
-        <div className="flex items-center gap-3">
-          {/* Section Stepper (When in Section View) */}
-          {viewMode === 'section' && (
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-7 w-7 border-zinc-800 bg-zinc-900"
-                onClick={handlePrevSection}
-                disabled={activeSectionIndex <= 0}
-                title="Previous Section"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </Button>
-
-              {/* Section dropdown picker */}
-              <select
-                value={activeSectionIndex}
-                onChange={(e) => handleSelectSectionByIndex(parseInt(e.target.value, 10))}
-                className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-200 font-mono focus:outline-none focus:border-zinc-700 max-w-[170px] truncate"
-                title="Choose section"
-              >
-                {parsedSections.map((sec, idx) => (
-                  <option key={idx} value={idx}>
-                    {idx + 1}. {sec.title} (p. {sec.pageNumber})
-                  </option>
-                ))}
-              </select>
-
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-7 w-7 border-zinc-800 bg-zinc-900"
-                onClick={handleNextSection}
-                disabled={activeSectionIndex >= parsedSections.length - 1}
-                title="Next Section"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Button>
-
-              <span className="text-[10px] font-mono text-zinc-500 pl-0.5">
-                p. {currentSection.pageNumber}
-              </span>
-            </div>
-          )}
-
-          {/* Quick Section Jump (When in Whole Document View) */}
-          {viewMode === 'full' && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono text-zinc-500">Jump to:</span>
-              <select
-                onChange={(e) => handleSelectSectionByIndex(parseInt(e.target.value, 10))}
-                className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-200 font-mono focus:outline-none focus:border-zinc-700 max-w-[170px] truncate"
-                title="Jump to section"
-              >
-                {parsedSections.map((sec, idx) => (
-                  <option key={idx} value={idx}>
-                    § {sec.title} (p. {sec.pageNumber})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800 rounded px-1.5 py-0.5">
-            <button
-              onClick={handleZoomOut}
-              disabled={zoomLevel <= 70}
-              className="p-1 hover:text-zinc-100 disabled:opacity-30 transition-colors"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[11px] font-mono px-1 text-zinc-400 min-w-[36px] text-center">
-              {zoomLevel}%
-            </span>
-            <button
-              onClick={handleZoomIn}
-              disabled={zoomLevel >= 150}
-              className="p-1 hover:text-zinc-100 disabled:opacity-30 transition-colors"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        {/* Right: Actions & Discussion Toggle */}
+        <div className="flex items-center gap-2">
+          <a
+            href={basePdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-800 rounded text-[11px] font-mono transition-colors shadow-sm"
+            title="Open uploaded PDF in new tab"
+          >
+            <ExternalLink className="w-3 h-3 text-zinc-400" />
+            <span>Open PDF</span>
+          </a>
 
           {/* Collapsed AI Box Restore Trigger */}
           {isAiBoxCollapsed && onToggleAiBox && (
@@ -354,125 +153,21 @@ export function DocumentReader({
         </div>
       </header>
 
-      {/* Document View Canvas */}
-      <div
-        ref={fullDocumentContainerRef}
-        className="flex-1 overflow-y-auto p-6 flex flex-col items-center bg-zinc-950/40"
-      >
-        <div
-          style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-          className={`max-w-2xl w-full bg-zinc-900/50 border rounded-lg p-8 shadow-2xl text-zinc-300 space-y-6 leading-relaxed text-sm transition-all duration-300 ${
-            highlightFlash
-              ? 'border-indigo-500/80 ring-2 ring-indigo-500/30'
-              : 'border-zinc-800/90'
-          }`}
-        >
-          {/* Header Banner */}
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3 text-xs">
-            <span className="font-mono text-[11px] text-zinc-400 uppercase tracking-wider">
-              {viewMode === 'section'
-                ? `SECTION ${activeSectionIndex + 1} OF ${parsedSections.length} · PAGE ${currentSection.pageNumber}`
-                : `COMPLETE MANUSCRIPT · ${parsedSections.length} SECTIONS · ${pageCount} PAGES`}
-            </span>
-            <span className="font-mono text-[11px] text-zinc-400">
-              {viewMode === 'section' ? 'Section View' : 'Continuous View'}
-            </span>
+      {/* Direct PDF View Canvas */}
+      <div className="flex-1 w-full h-full relative bg-[#090a0f] overflow-hidden">
+        {isPdfLoading && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#090a0f]/80 text-xs font-mono text-zinc-400 gap-2">
+            <RotateCw className="w-5 h-5 animate-spin text-zinc-400" />
+            <span>Loading PDF manuscript...</span>
           </div>
-
-          {/* Paper Title & Authors */}
-          <div className="space-y-3 pb-3 border-b border-zinc-800/60">
-            <h1 className="text-xl font-bold tracking-tight text-zinc-100">{paperTitle}</h1>
-            <p className="text-xs text-zinc-400 font-mono">{authors.join(', ')}</p>
-          </div>
-
-          {/* MODE 1: SECTION-BY-SECTION VIEW */}
-          {viewMode === 'section' && (
-            <div className="space-y-6">
-              {/* Focused Section Card */}
-              <div className="p-6 rounded-md bg-zinc-900/80 border border-zinc-800/80 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                      Section {activeSectionIndex + 1}
-                    </span>
-                    <h2 className="text-base font-semibold text-zinc-100 tracking-tight">
-                      {currentSection.title}
-                    </h2>
-                  </div>
-                  <span className="text-[11px] font-mono text-zinc-400">
-                    Page {currentSection.pageNumber}
-                  </span>
-                </div>
-
-                {/* Section Content with Markdown, Tables & Math Formulas */}
-                <div className="pt-1">
-                  <MarkdownRenderer content={currentSection.content} />
-                </div>
-              </div>
-
-              {/* Bottom Quick Navigation between sections */}
-              <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrevSection}
-                  disabled={activeSectionIndex <= 0}
-                  className="text-xs font-mono border-zinc-800"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5 mr-1" />
-                  Previous Section
-                </Button>
-
-                <span className="text-xs font-mono text-zinc-500">
-                  {activeSectionIndex + 1} / {parsedSections.length}
-                </span>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleNextSection}
-                  disabled={activeSectionIndex >= parsedSections.length - 1}
-                  className="text-xs font-mono border-zinc-800"
-                >
-                  Next Section
-                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* MODE 2: WHOLE CONTINUOUS DOCUMENT VIEW */}
-          {viewMode === 'full' && (
-            <div className="space-y-8">
-              {parsedSections.map((sec, idx) => (
-                <div
-                  key={idx}
-                  id={`section-anchor-${idx}`}
-                  className="p-6 rounded-md bg-zinc-900/60 border border-zinc-800/80 space-y-3 scroll-mt-6"
-                >
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/60">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                        § {idx + 1}
-                      </span>
-                      <h2 className="text-sm font-semibold text-zinc-100 tracking-tight">
-                        {sec.title}
-                      </h2>
-                    </div>
-                    <span className="text-[10px] font-mono text-zinc-400">
-                      Page {sec.pageNumber}
-                    </span>
-                  </div>
-
-                  {/* Continuous Section Content with Markdown, Tables & Math Formulas */}
-                  <div className="pt-1">
-                    <MarkdownRenderer content={sec.content} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
+        <iframe
+          key={`${paperId}-${iframeKey}`}
+          src={pdfViewerUrl}
+          className="w-full h-full border-0 bg-[#0d0f14]"
+          title={paperTitle}
+          onLoad={() => setIsPdfLoading(false)}
+        />
       </div>
     </div>
   );

@@ -61,6 +61,43 @@ export function createApp(): express.Application {
         return;
       }
 
+      const filePath = req.file.path;
+      const originalFilename = req.file.originalname;
+
+      // Compute SHA-256 fingerprint for instant byte-level deduplication
+      let fileHash = '';
+      try {
+        const fileBuffer = fs.readFileSync(filePath);
+        fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      } catch (hashErr) {
+        console.warn('[Upload] Could not compute file hash:', hashErr);
+      }
+
+      // Check if this identical file has already been uploaded & indexed
+      const existingPaper = fileHash ? paperStore.findByHash(fileHash) : undefined;
+      if (existingPaper) {
+        // Clean up redundant uploaded file from disk
+        try {
+          fs.unlinkSync(filePath);
+        } catch {}
+
+        const job = jobManager.createJob(existingPaper.id);
+        jobManager.updateJob(job.jobId, {
+          status: 'completed',
+          progress: 100,
+          message: `Paper "${existingPaper.title}" is already uploaded and indexed. Reusing existing vector index.`,
+        });
+
+        res.status(200).json({
+          jobId: job.jobId,
+          paperId: existingPaper.id,
+          status: 'completed',
+          message: 'Document already indexed. Reusing existing vector index.',
+          duplicate: true,
+        });
+        return;
+      }
+
       const paperId = `paper-${crypto.randomUUID()}`;
       const job = jobManager.createJob(paperId);
 
@@ -72,13 +109,26 @@ export function createApp(): express.Application {
       });
 
       // Dispatch background async extraction worker
-      const filePath = req.file.path;
-      const originalFilename = req.file.originalname;
-
       (async () => {
         try {
           jobManager.updateJob(job.jobId, { status: 'parsing', progress: 20 });
           const extracted = await extractDocumentStructure(filePath, originalFilename);
+
+          // Deduplication by extracted title (in case file bytes differed slightly)
+          const existingByTitle = paperStore.findByTitle(extracted.title);
+          if (existingByTitle) {
+            try {
+              fs.unlinkSync(filePath);
+            } catch {}
+
+            jobManager.updateJob(job.jobId, {
+              paperId: existingByTitle.id,
+              status: 'completed',
+              progress: 100,
+              message: `Paper "${existingByTitle.title}" is already indexed. Reusing existing vector index.`,
+            });
+            return;
+          }
 
           jobManager.updateJob(job.jobId, { status: 'extracting', progress: 50 });
 
@@ -90,6 +140,7 @@ export function createApp(): express.Application {
             filePath,
             sections: extracted.sections,
             rawMarkdown: extracted.rawMarkdown,
+            fileHash,
             createdAt: new Date().toISOString(),
           };
 
@@ -135,6 +186,38 @@ export function createApp(): express.Application {
       return;
     }
     res.json(paper);
+  });
+
+  // Raw PDF Document Streaming Endpoint
+  app.get('/api/papers/:paperId/pdf', (req: Request, res: Response): void => {
+    const paper = paperStore.getPaper(req.params.paperId);
+    if (!paper) {
+      res.status(404).json({ error: 'Paper not found' });
+      return;
+    }
+
+    let filePath = paper.filePath;
+    if (!filePath || !fs.existsSync(filePath)) {
+      const fallbackPath = path.resolve(uploadDir, path.basename(filePath || ''));
+      if (fs.existsSync(fallbackPath)) {
+        filePath = fallbackPath;
+      } else if (paper.id === 'paper-attention') {
+        const seedPath = path.resolve(uploadDir, 'attention-is-all-you-need.pdf');
+        if (fs.existsSync(seedPath)) filePath = seedPath;
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'PDF file not found on disk' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(paper.title)}.pdf"`
+    );
+    res.sendFile(path.resolve(filePath));
   });
 
   // List all indexed papers
@@ -225,6 +308,16 @@ export function createApp(): express.Application {
     }
 
     res.json({ results });
+  });
+
+  // Qdrant Cluster & Ingestion Statistics Endpoint
+  app.get('/api/qdrant/stats', async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const stats = await retrievalService.getStats();
+      res.json(stats);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch Qdrant stats' });
+    }
   });
 
   // Chat Streaming Endpoint with Grounded Synthesis & Attributions

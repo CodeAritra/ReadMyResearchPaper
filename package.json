@@ -12,7 +12,9 @@
     "dev:web": "npm run --workspace=apps/web dev",
     "build": "npm run --workspaces --if-present build",
     "typecheck": "npm run --workspaces --if-present typecheck",
-    "test": "npm run --workspaces --if-present test"
+    "test": "npm run --workspaces --if-present test",
+    "qdrant:stats": "node apps/server/scripts/check-qdrant.js",
+    "qdrant:clear": "node apps/server/scripts/clear-except-attention.js"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"

@@ -33,4 +33,23 @@ describe('POST /api/chat (SSE Streaming Chat Seam)', () => {
     expect(response.body).toHaveProperty('error');
     expect(response.body.error).toContain('query is required');
   });
+
+  it('should serve raw PDF bytes with application/pdf content type', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/papers/paper-attention/pdf')
+      .expect(200);
+
+    expect(response.headers['content-type']).toContain('application/pdf');
+    expect(response.headers['content-disposition']).toContain('inline');
+  });
+
+  it('should return 404 for non-existent paper PDF', async () => {
+    const app = createApp();
+
+    await request(app)
+      .get('/api/papers/non-existent-paper-id/pdf')
+      .expect(404);
+  });
 });

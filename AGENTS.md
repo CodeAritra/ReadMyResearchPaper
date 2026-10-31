@@ -35,6 +35,7 @@ Design for an academic researcher, not a generic chatbot showcase:
 - **Concurrent Execution**: Run `npm run dev` at the repository root to start both `apps/web` (port 3000) and `apps/server` (port 3001) simultaneously via `concurrently`.
 - **First-Time User Walkthrough**: Onboarding guided tour is provided by `driver.js` with academic monochromatic popover themes anchored to key UI targets.
 - **Seeded Manuscript**: The authentic *Attention Is All You Need* (Vaswani et al.) manuscript is pre-loaded into `apps/server/uploads/` and indexed into the retrieval service for immediate local testing.
+- **Memory Synchronization**: Whenever you change any implementation, fix a bug, or adjust configuration/behavior, immediately update [`MEMORY.md`](./MEMORY.md) with the change summary and rationale.
 
 ## Deployment & Dockerization Rules
 
@@ -51,4 +52,5 @@ Design for an academic researcher, not a generic chatbot showcase:
 
 - TypeScript strict mode enabled across all packages.
 - Always run `npm run typecheck` across all packages before declaring a task complete.
+- Immediately record all implementation and behavioral changes in [`MEMORY.md`](./MEMORY.md).
 - Preserve all existing comments and docstrings.

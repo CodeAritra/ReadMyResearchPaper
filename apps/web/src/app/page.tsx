@@ -12,10 +12,12 @@ import {
   Library,
   PlusCircle,
   Check,
+  HelpCircle,
 } from 'lucide-react';
 import { UploadPaperDialog } from '@/components/UploadPaperDialog';
 import { DocumentReader } from '@/components/DocumentReader';
 import { CitationBadge } from '@/components/CitationBadge';
+import { TutorialTour } from '@/components/TutorialTour';
 import { Attribution, Collection } from '@research-qna/types';
 
 interface Message {
@@ -40,29 +42,70 @@ interface ActivePaper {
   rawMarkdown?: string;
 }
 
-export default function WorkbenchPage() {
-  const [activePaper, setActivePaper] = useState<ActivePaper>({
-    id: 'paper-sample-1',
-    title: 'Attention Is All You Need',
-    authors: ['Vaswani et al.'],
-    pageCount: 11,
-    sections: [
-      { title: 'Abstract', pageNumber: 1 },
-      { title: 'Introduction', pageNumber: 1 },
-      { title: 'Model Architecture', pageNumber: 2 },
-      { title: 'Methodology', pageNumber: 3 },
-      { title: 'Attention Mechanism', pageNumber: 4 },
-      { title: 'Results', pageNumber: 7 },
-    ],
-    rawMarkdown: `The Transformer computes self-attention using queries, keys, and values:
-$$\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V$$
-Multi-Head Attention allows the model to jointly attend to information at different representation subspaces.`,
-  });
+const INITIAL_ATTENTION_PAPER: ActivePaper = {
+  id: 'paper-attention',
+  title: 'Attention Is All You Need',
+  authors: [
+    'Ashish Vaswani',
+    'Noam Shazeer',
+    'Niki Parmar',
+    'Jakob Uszkoreit',
+    'Llion Jones',
+    'Aidan N. Gomez',
+    'Łukasz Kaiser',
+    'Illia Polosukhin',
+  ],
+  pageCount: 11,
+  sections: [
+    { title: 'Abstract', pageNumber: 1 },
+    { title: '1 Introduction', pageNumber: 1 },
+    { title: '2 Background', pageNumber: 2 },
+    { title: '3 Model Architecture', pageNumber: 2 },
+    { title: '3.1 Encoder and Decoder Stacks', pageNumber: 2 },
+    { title: '3.2 Attention', pageNumber: 3 },
+    { title: '3.2.1 Scaled Dot-Product Attention', pageNumber: 3 },
+    { title: '3.2.2 Multi-Head Attention', pageNumber: 4 },
+    { title: '3.2.3 Applications of Attention', pageNumber: 5 },
+    { title: '3.3 Position-wise Feed-Forward Networks', pageNumber: 5 },
+    { title: '3.5 Positional Encoding', pageNumber: 6 },
+    { title: '4 Why Self-Attention', pageNumber: 6 },
+    { title: '5 Training & Hyperparameters', pageNumber: 7 },
+    { title: '6 Results', pageNumber: 8 },
+    { title: '7 Conclusion', pageNumber: 10 },
+  ],
+  rawMarkdown: `# Attention Is All You Need
 
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, Illia Polosukhin
+
+## Abstract
+[PAGE 1]
+The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs.
+
+## 3.2.1 Scaled Dot-Product Attention
+[PAGE 3]
+We call our particular attention "Scaled Dot-Product Attention". The input consists of queries and keys of dimension $d_k$, and values of dimension $d_v$. We compute the dot products of the query with all keys, divide each by $\\sqrt{d_k}$, and apply a softmax function to obtain the weights on the values:
+
+$$\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V$$
+
+## 3.2.2 Multi-Head Attention
+[PAGE 4]
+Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions:
+
+$$\\text{MultiHead}(Q, K, V) = \\text{Concat}(\\text{head}_1, \\dots, \\text{head}_h)W^O$$
+$$\\text{where} \\quad \\text{head}_i = \\text{Attention}(QW_i^Q, KW_i^K, VW_i^V)$$
+
+## 6 Results
+[PAGE 8]
+On the WMT 2014 English-to-German translation task, the big transformer model achieves a state-of-the-art BLEU score of 28.4. On WMT 2014 English-to-French, our model establishes a new score of 41.8.`,
+};
+
+export default function WorkbenchPage() {
+  const [activePaper, setActivePaper] = useState<ActivePaper>(INITIAL_ATTENTION_PAPER);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const [activePage, setActivePage] = useState(1);
   const [messages, setMessages] = useState<Message[]>([
@@ -70,15 +113,17 @@ Multi-Head Attention allows the model to jointly attend to information at differ
       id: 'welcome',
       role: 'assistant',
       content:
-        'Welcome to the Research Paper Q&A Workbench. Ready to analyze uploaded literature, curate Collections, and verify comparative cross-paper citations.',
+        'Welcome to the Research Paper Q&A Workbench. The complete manuscript "Attention Is All You Need" (Vaswani et al., 11 pages) is loaded and indexed. You can ask deep technical questions, explore sections, or upload additional papers.',
       attributions: [
         {
-          paperId: 'paper-sample-1',
+          paperId: 'paper-attention',
           paperTitle: 'Attention Is All You Need',
-          sectionTitle: 'Methodology',
+          sectionTitle: '3.2.1 Scaled Dot-Product Attention',
           pageNumber: 3,
+          sourceType: 'uploaded_paper',
         },
       ],
+      toolUsed: 'search_uploaded_papers',
     },
   ]);
   const [input, setInput] = useState('');
@@ -89,8 +134,23 @@ Multi-Head Attention allows the model to jointly attend to information at differ
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Fetch collections on mount
+  // Check first-time visitor for tutorial tour and load seeded paper
   useEffect(() => {
+    const hasSeenTour = localStorage.getItem('research_qna_tutorial_seen');
+    if (!hasSeenTour) {
+      setIsTourOpen(true);
+    }
+
+    // Fetch live seeded paper with complete markdown from Express API
+    fetch('http://localhost:3001/api/papers/paper-attention')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.title) {
+          setActivePaper(data);
+        }
+      })
+      .catch(() => {});
+
     fetchCollections();
   }, []);
 
@@ -102,7 +162,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
         setCollections(data);
       }
     } catch {
-      // Server might not be running in build/dev, ignore
+      // Offline fallback
     }
   };
 
@@ -324,6 +384,9 @@ Multi-Head Attention allows the model to jointly attend to information at differ
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#090a0f] text-zinc-100 antialiased font-sans">
+      {/* Tutorial Overlay */}
+      <TutorialTour isOpen={isTourOpen} onClose={() => setIsTourOpen(false)} />
+
       {/* Sidebar: Navigation & Collections */}
       <aside className="w-64 border-r border-zinc-800 bg-[#0d0f14] flex flex-col justify-between p-4 shrink-0">
         <div className="space-y-5 overflow-y-auto pr-1">
@@ -335,7 +398,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
           </div>
 
           {/* Ingestion Dialog Button */}
-          <div className="space-y-2">
+          <div id="tour-ingestion" className="space-y-2">
             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2">
               Ingestion
             </div>
@@ -343,7 +406,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
           </div>
 
           {/* Collections Workspace */}
-          <div className="space-y-2">
+          <div id="tour-collections" className="space-y-2">
             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Library className="w-3.5 h-3.5 text-zinc-400" />
@@ -429,7 +492,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
                 <span className="truncate">{activePaper.title}</span>
               </div>
               <div className="text-[11px] text-zinc-400 font-mono">
-                {activePaper.authors.join(', ')} · {activePaper.pageCount} pages
+                {activePaper.authors.slice(0, 3).join(', ')}{activePaper.authors.length > 3 ? ' et al.' : ''} · {activePaper.pageCount} pages
               </div>
 
               {activeCollection && !activeCollection.paperIds.includes(activePaper.id) && (
@@ -445,7 +508,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
           </div>
 
           {/* Structural Sections */}
-          <div>
+          <div id="tour-sections">
             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2 mb-2 flex items-center justify-between">
               <span>Sections</span>
               <span className="text-[10px] font-mono bg-zinc-800 px-1.5 py-0.5 rounded">
@@ -471,16 +534,30 @@ Multi-Head Attention allows the model to jointly attend to information at differ
           </div>
         </div>
 
-        <div className="border-t border-zinc-800/80 pt-3 text-[11px] text-zinc-400 font-mono flex items-center justify-between shrink-0">
-          <span>{activeCollection ? 'Partitioned Retrieval' : 'Single Paper Grounding'}</span>
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        {/* Sidebar Footer */}
+        <div className="border-t border-zinc-800/80 pt-3 space-y-2 shrink-0">
+          <button
+            onClick={() => setIsTourOpen(true)}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[11px] font-mono text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <HelpCircle className="w-3.5 h-3.5 text-zinc-400" />
+              Quick Walkthrough
+            </span>
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Tutorial</span>
+          </button>
+
+          <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
+            <span>{activeCollection ? 'Partitioned Retrieval' : 'Single Paper Grounding'}</span>
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          </div>
         </div>
       </aside>
 
       {/* Main 2-Pane Workbench */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Pane: Interactive Document Canvas */}
-        <section className="flex-1 border-r border-zinc-800 bg-[#090a0f] flex flex-col overflow-hidden">
+        <section id="tour-document-reader" className="flex-1 border-r border-zinc-800 bg-[#090a0f] flex flex-col overflow-hidden">
           <DocumentReader
             paperTitle={activePaper.title}
             authors={activePaper.authors}
@@ -493,7 +570,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
         </section>
 
         {/* Right Pane: Discussion & Grounded Q&A */}
-        <section className="w-[480px] bg-[#0d0f14] flex flex-col shrink-0">
+        <section id="tour-discussion" className="w-[480px] bg-[#0d0f14] flex flex-col shrink-0">
           <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400">
             <div className="flex items-center gap-2">
               <Terminal className="w-3.5 h-3.5 text-zinc-400" />

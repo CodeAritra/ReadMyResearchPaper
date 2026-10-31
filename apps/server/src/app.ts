@@ -11,6 +11,7 @@ import { collectionStore } from './services/collectionStore.js';
 import { extractDocumentStructure } from './services/extraction.js';
 import { chunkPaperBySections, retrievalService } from './services/retrieval.js';
 import { streamGroundedSynthesis } from './services/synthesis.js';
+import { seedAttentionPaper } from './services/seedPaper.js';
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -39,6 +40,9 @@ const upload = multer({
 
 export function createApp(): express.Application {
   const app = express();
+
+  // Seed actual Attention Is All You Need paper & index chunks
+  seedAttentionPaper();
 
   app.use(cors());
   app.use(express.json());

@@ -1,6 +1,8 @@
 import { Attribution, EvidenceChunk } from '@research-qna/types';
 import { retrievalService } from './retrieval.js';
 import { collectionStore } from './collectionStore.js';
+import { routeQueryIntent } from './agentService.js';
+import { searchArxivTool, searchWebTool, ToolEvidence } from './agentTools.js';
 import { Response } from 'express';
 
 export interface SynthesisOptions {
@@ -15,6 +17,45 @@ export async function streamGroundedSynthesis(
   options: SynthesisOptions
 ): Promise<void> {
   const { query, paperId, collectionId } = options;
+
+  // Agent Tool Query Routing Seam
+  const toolUsed = routeQueryIntent({ query, paperId, collectionId });
+  res.write(`data: ${JSON.stringify({ tool: toolUsed })}\n\n`);
+
+  // Handle external search seams (arXiv / Web)
+  if (toolUsed === 'search_arxiv' || toolUsed === 'search_web') {
+    const toolOutput =
+      toolUsed === 'search_arxiv'
+        ? await searchArxivTool.invoke({ query })
+        : await searchWebTool.invoke({ query });
+
+    const evidenceList: ToolEvidence[] = JSON.parse(toolOutput);
+    const attributions: Attribution[] = evidenceList.map((item) => ({
+      paperId: item.paperId,
+      paperTitle: item.paperTitle,
+      sectionTitle: item.sectionTitle,
+      pageNumber: item.pageNumber,
+      snippet: item.content.slice(0, 150) + (item.content.length > 150 ? '...' : ''),
+      sourceType: item.sourceType,
+    }));
+
+    const first = evidenceList[0];
+    const text =
+      toolUsed === 'search_arxiv'
+        ? `According to external literature [${first.paperTitle}]: ${first.content}`
+        : `According to external web resources [${first.paperTitle}]: ${first.content}`;
+
+    const tokens = text.split(' ');
+    for (let i = 0; i < tokens.length; i++) {
+      const token = (i === 0 ? '' : ' ') + tokens[i];
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    }
+
+    res.write(`data: ${JSON.stringify({ attributions })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return;
+  }
 
   // Retrieve candidate Evidence Chunks (partitioned across collection papers if collectionId provided)
   let relevantChunks: EvidenceChunk[] = [];
@@ -57,6 +98,7 @@ export async function streamGroundedSynthesis(
     sectionTitle: chunk.sectionTitle,
     pageNumber: chunk.pageNumber,
     snippet: chunk.content.slice(0, 150) + (chunk.content.length > 150 ? '...' : ''),
+    sourceType: 'uploaded_paper',
   }));
 
   // If Gemini API Key is available, invoke LangChain ChatGoogleGenerativeAI

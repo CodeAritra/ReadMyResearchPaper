@@ -181,4 +181,59 @@ Architecture benchmark score benchmark score benchmark score.`;
       expect(fullResponse.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Agentic Tool Routing & Provenance Streaming (Ticket 06)', () => {
+    it('streams tool notification and attributions with arxiv sourceType for external queries', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({
+          query: 'Search arXiv for recent quantum neural network preprints',
+        })
+        .expect(200);
+
+      const rawText = response.text;
+      const lines = rawText.split('\n\n').filter((l) => l.startsWith('data:'));
+      const payloads = lines
+        .map((l) => l.replace(/^data:\s*/, ''))
+        .filter((l) => l !== '[DONE]')
+        .map((l) => JSON.parse(l));
+
+      const toolPayload = payloads.find((p) => p.tool);
+      expect(toolPayload).toBeDefined();
+      expect(toolPayload.tool).toBe('search_arxiv');
+
+      const attributions = payloads.filter((p) => p.attributions).flatMap((p) => p.attributions);
+      expect(attributions.length).toBeGreaterThan(0);
+      expect(attributions[0].sourceType).toBe('arxiv');
+    });
+
+    it('streams search_uploaded_papers tool and uploaded_paper sourceType for paper queries', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({
+          query: 'What is the attention equation in methodology?',
+          paperId: samplePaper.id,
+        })
+        .expect(200);
+
+      const rawText = response.text;
+      const lines = rawText.split('\n\n').filter((l) => l.startsWith('data:'));
+      const payloads = lines
+        .map((l) => l.replace(/^data:\s*/, ''))
+        .filter((l) => l !== '[DONE]')
+        .map((l) => JSON.parse(l));
+
+      const toolPayload = payloads.find((p) => p.tool);
+      expect(toolPayload).toBeDefined();
+      expect(toolPayload.tool).toBe('search_uploaded_papers');
+
+      const attributions = payloads.filter((p) => p.attributions).flatMap((p) => p.attributions);
+      expect(attributions.length).toBeGreaterThan(0);
+      expect(attributions[0].sourceType).toBe('uploaded_paper');
+    });
+  });
 });

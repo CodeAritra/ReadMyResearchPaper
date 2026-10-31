@@ -39,12 +39,15 @@ export interface EvidenceChunk {
   score?: number;
 }
 
+export type SourceProvenance = 'uploaded_paper' | 'arxiv' | 'web';
+
 export interface Attribution {
   paperId: string;
   paperTitle: string;
   sectionTitle: string;
   pageNumber: number;
   snippet?: string;
+  sourceType?: SourceProvenance;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system';

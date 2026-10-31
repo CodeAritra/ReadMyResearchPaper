@@ -4,10 +4,10 @@
 
 **Blocked by:** 04: Grounded Single-Paper Q&A with Interactive Citation Anchors & PDF Viewer
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Local retrieval is encapsulated behind a LangChain tool (`search_uploaded_papers`).
-- [ ] An extensible tool interface is established for external search providers (`search_arxiv`, `search_web`).
-- [ ] The agent autonomously routes queries to the appropriate tool based on user prompt context.
-- [ ] UI displays subtle, non-intrusive provenance badges showing whether an answer was derived from uploaded papers or external sources.
-- [ ] Integration test verifies that the agent correctly calls the local search tool when queried about uploaded paper content.
+- [x] Local retrieval is encapsulated behind a LangChain tool (`search_uploaded_papers`).
+- [x] An extensible tool interface is established for external search providers (`search_arxiv`, `search_web`).
+- [x] The agent autonomously routes queries to the appropriate tool based on user prompt context.
+- [x] UI displays subtle, non-intrusive provenance badges showing whether an answer was derived from uploaded papers or external sources.
+- [x] Integration test verifies that the agent correctly calls the local search tool when queried about uploaded paper content.

@@ -23,6 +23,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   attributions?: Attribution[];
+  toolUsed?: 'search_uploaded_papers' | 'search_arxiv' | 'search_web';
 }
 
 interface PaperSection {
@@ -190,7 +191,7 @@ Multi-Head Attention allows the model to jointly attend to information at differ
 
   // Cross-paper interactive citation navigation
   const handleNavigateCitation = async (paperId: string, pageNumber: number) => {
-    if (paperId && paperId !== activePaper.id) {
+    if (paperId && paperId !== activePaper.id && !paperId.startsWith('arxiv') && !paperId.startsWith('web')) {
       try {
         const res = await fetch(`http://localhost:3001/api/papers/${paperId}`);
         if (res.ok) {
@@ -263,6 +264,15 @@ Multi-Head Attention allows the model to jointly attend to information at differ
 
           try {
             const parsed = JSON.parse(payload);
+            if (parsed.tool) {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, toolUsed: parsed.tool }
+                    : msg
+                )
+              );
+            }
             if (parsed.token) {
               setMessages((prev) =>
                 prev.map((msg) =>
@@ -514,6 +524,15 @@ Multi-Head Attention allows the model to jointly attend to information at differ
                 >
                   <div className="text-[10px] font-mono text-zinc-400 mb-1 flex items-center justify-between">
                     <span>{msg.role === 'user' ? 'YOU' : 'RESEARCH ASSISTANT'}</span>
+                    {msg.toolUsed && (
+                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/50">
+                        {msg.toolUsed === 'search_arxiv'
+                          ? 'arXiv Preprints'
+                          : msg.toolUsed === 'search_web'
+                          ? 'Web Literature'
+                          : 'Uploaded Papers'}
+                      </span>
+                    )}
                   </div>
 
                   <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>

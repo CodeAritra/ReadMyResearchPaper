@@ -13,10 +13,16 @@ import {
   PlusCircle,
   Check,
   HelpCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  GripVertical,
 } from 'lucide-react';
 import { UploadPaperDialog } from '@/components/UploadPaperDialog';
 import { DocumentReader } from '@/components/DocumentReader';
 import { CitationBadge } from '@/components/CitationBadge';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { TutorialTour, runInteractiveTour } from '@/components/TutorialTour';
 import { Attribution, Collection } from '@research-qna/types';
 
@@ -105,6 +111,67 @@ export default function WorkbenchPage() {
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
+  const [selectedSectionTitle, setSelectedSectionTitle] = useState<string | undefined>('Abstract');
+
+  // Collapsible & Draggable Panes State
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
+
+  const [aiBoxWidth, setAiBoxWidth] = useState(460);
+  const [isAiBoxCollapsed, setIsAiBoxCollapsed] = useState(false);
+  const [isDraggingAiBox, setIsDraggingAiBox] = useState(false);
+
+  useEffect(() => {
+    let animationFrameId: number | null = null;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingSidebar && !isDraggingAiBox) return;
+
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+
+      animationFrameId = requestAnimationFrame(() => {
+        if (isDraggingSidebar) {
+          const newWidth = Math.min(Math.max(180, e.clientX), 480);
+          setSidebarWidth(newWidth);
+        }
+        if (isDraggingAiBox) {
+          const newWidth = Math.min(Math.max(300, window.innerWidth - e.clientX), 750);
+          setAiBoxWidth(newWidth);
+        }
+      });
+    };
+
+    const handleMouseUp = () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      setIsDraggingSidebar(false);
+      setIsDraggingAiBox(false);
+    };
+
+    if (isDraggingSidebar || isDraggingAiBox) {
+      window.addEventListener('mousemove', handleMouseMove, { passive: true });
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    } else {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    }
+
+    return () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isDraggingSidebar, isDraggingAiBox]);
 
   const [activePage, setActivePage] = useState(1);
   const [messages, setMessages] = useState<Message[]>([
@@ -244,7 +311,11 @@ export default function WorkbenchPage() {
   };
 
   // Cross-paper interactive citation navigation
-  const handleNavigateCitation = async (paperId: string, pageNumber: number) => {
+  const handleNavigateCitation = async (
+    paperId: string,
+    pageNumber: number,
+    sectionTitle?: string
+  ) => {
     if (paperId && paperId !== activePaper.id && !paperId.startsWith('arxiv') && !paperId.startsWith('web')) {
       try {
         const res = await fetch(`http://localhost:3001/api/papers/${paperId}`);
@@ -257,6 +328,9 @@ export default function WorkbenchPage() {
       }
     }
     setActivePage(pageNumber);
+    if (sectionTitle) {
+      setSelectedSectionTitle(sectionTitle);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -381,14 +455,33 @@ export default function WorkbenchPage() {
       {/* Interactive Driver.js Tutorial Tour */}
       <TutorialTour autoStart />
 
+      {/* Full-screen invisible overlay during dragging to prevent event capture lag */}
+      {(isDraggingSidebar || isDraggingAiBox) && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto bg-transparent" />
+      )}
+
       {/* Sidebar: Navigation & Collections */}
-      <aside className="w-64 border-r border-zinc-800 bg-[#0d0f14] flex flex-col justify-between p-4 shrink-0">
-        <div className="space-y-5 overflow-y-auto pr-1">
-          <div className="flex items-center gap-2 px-2 py-1">
-            <BookOpen className="w-5 h-5 text-zinc-300" />
-            <span className="font-semibold tracking-tight text-sm text-zinc-100">
-              Paper Workbench
-            </span>
+      <aside
+        style={{ width: isSidebarCollapsed ? 0 : sidebarWidth }}
+        className={`bg-[#0d0f14] flex flex-col justify-between shrink-0 overflow-hidden relative ${
+          isDraggingSidebar ? 'transition-none' : 'transition-[width] duration-150'
+        } ${isSidebarCollapsed ? 'border-r-0 p-0' : 'p-4 border-r border-zinc-800'}`}
+      >
+        <div className="space-y-5 overflow-y-auto pr-1 min-w-[220px]">
+          <div className="flex items-center justify-between px-2 py-1">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-zinc-300" />
+              <span className="font-semibold tracking-tight text-sm text-zinc-100">
+                Paper Workbench
+              </span>
+            </div>
+            <button
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="p-1 -mr-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80 rounded transition-colors"
+              title="Collapse Sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Ingestion Dialog Button */}
@@ -513,9 +606,12 @@ export default function WorkbenchPage() {
               {activePaper.sections.map((sec, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setActivePage(sec.pageNumber)}
+                  onClick={() => {
+                    setSelectedSectionTitle(sec.title);
+                    setActivePage(sec.pageNumber);
+                  }}
                   className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-[11px] transition-colors font-mono text-left ${
-                    activePage === sec.pageNumber
+                    selectedSectionTitle === sec.title
                       ? 'bg-zinc-800 text-zinc-100 font-semibold'
                       : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                   }`}
@@ -548,10 +644,26 @@ export default function WorkbenchPage() {
         </div>
       </aside>
 
+      {/* Sidebar Draggable Resize Handle */}
+      {!isSidebarCollapsed && (
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsDraggingSidebar(true);
+          }}
+          className={`w-1 cursor-col-resize hover:bg-zinc-600 transition-colors shrink-0 relative group z-20 ${
+            isDraggingSidebar ? 'bg-indigo-500' : 'bg-transparent'
+          }`}
+          title="Drag to resize sidebar"
+        >
+          <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+        </div>
+      )}
+
       {/* Main 2-Pane Workbench */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Pane: Interactive Document Canvas */}
-        <section id="tour-document-reader" className="flex-1 border-r border-zinc-800 bg-[#090a0f] flex flex-col overflow-hidden">
+        <section id="tour-document-reader" className="flex-1 bg-[#090a0f] flex flex-col overflow-hidden">
           <DocumentReader
             paperTitle={activePaper.title}
             authors={activePaper.authors}
@@ -560,103 +672,149 @@ export default function WorkbenchPage() {
             rawMarkdown={activePaper.rawMarkdown}
             activePage={activePage}
             onPageChange={setActivePage}
+            selectedSectionTitle={selectedSectionTitle}
+            onSelectSection={(title, page) => {
+              setSelectedSectionTitle(title);
+              setActivePage(page);
+            }}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            isAiBoxCollapsed={isAiBoxCollapsed}
+            onToggleAiBox={() => setIsAiBoxCollapsed(!isAiBoxCollapsed)}
           />
         </section>
 
-        {/* Right Pane: Discussion & Grounded Q&A */}
-        <section id="tour-discussion" className="w-[480px] bg-[#0d0f14] flex flex-col shrink-0">
-          <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="font-medium text-zinc-200">
-                {activeCollection ? `Collection: ${activeCollection.name}` : 'Discussion'}
-              </span>
-            </div>
-            <span className="text-[11px] font-mono text-zinc-400">
-              {activeCollection ? 'Cross-Paper Synthesis' : 'Strict Attribution'}
-            </span>
-          </header>
+        {/* AI Box Draggable Resize Handle */}
+        {!isAiBoxCollapsed && (
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsDraggingAiBox(true);
+            }}
+            className={`w-1 cursor-col-resize hover:bg-zinc-600 transition-colors shrink-0 relative group z-20 border-l border-zinc-800 ${
+              isDraggingAiBox ? 'bg-indigo-500' : 'bg-transparent'
+            }`}
+            title="Drag to resize discussion pane"
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+          </div>
+        )}
 
-          {/* Messages Stream */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex flex-col text-xs leading-relaxed ${
-                  msg.role === 'user' ? 'items-end' : 'items-start'
-                }`}
-              >
+        {/* Right Pane: Discussion & Grounded Q&A */}
+        <section
+          id="tour-discussion"
+          style={{ width: isAiBoxCollapsed ? 0 : aiBoxWidth }}
+          className={`bg-[#0d0f14] flex flex-col shrink-0 overflow-hidden ${
+            isDraggingAiBox ? 'transition-none' : 'transition-[width] duration-150'
+          } ${isAiBoxCollapsed ? 'border-l-0' : 'border-l border-zinc-800'}`}
+        >
+          <div className="min-w-[300px] flex flex-col h-full">
+            <header className="h-11 border-b border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-400 shrink-0">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="font-medium text-zinc-200">
+                  {activeCollection ? `Collection: ${activeCollection.name}` : 'Discussion'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-zinc-400">
+                  {activeCollection ? 'Cross-Paper Synthesis' : 'Strict Attribution'}
+                </span>
+                <button
+                  onClick={() => setIsAiBoxCollapsed(true)}
+                  className="p-1 -mr-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80 rounded transition-colors"
+                  title="Collapse Discussion Pane"
+                >
+                  <PanelRightClose className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </header>
+
+            {/* Messages Stream */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((msg) => (
                 <div
-                  className={`max-w-[92%] rounded-md px-3.5 py-2.5 ${
-                    msg.role === 'user'
-                      ? 'bg-zinc-800 text-zinc-100 border border-zinc-700/60 font-medium'
-                      : 'bg-zinc-900/80 text-zinc-300 border border-zinc-800/80'
+                  key={msg.id}
+                  className={`flex flex-col text-xs leading-relaxed ${
+                    msg.role === 'user' ? 'items-end' : 'items-start'
                   }`}
                 >
-                  <div className="text-[10px] font-mono text-zinc-400 mb-1 flex items-center justify-between">
-                    <span>{msg.role === 'user' ? 'YOU' : 'RESEARCH ASSISTANT'}</span>
-                    {msg.toolUsed && (
-                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/50">
-                        {msg.toolUsed === 'search_arxiv'
-                          ? 'arXiv Preprints'
-                          : msg.toolUsed === 'search_web'
-                          ? 'Web Literature'
-                          : 'Uploaded Papers'}
-                      </span>
+                  <div
+                    className={`max-w-[92%] rounded-md px-3.5 py-2.5 ${
+                      msg.role === 'user'
+                        ? 'bg-zinc-800 text-zinc-100 border border-zinc-700/60 font-medium'
+                        : 'bg-zinc-900/80 text-zinc-300 border border-zinc-800/80'
+                    }`}
+                  >
+                    <div className="text-[10px] font-mono text-zinc-400 mb-1 flex items-center justify-between">
+                      <span>{msg.role === 'user' ? 'YOU' : 'RESEARCH ASSISTANT'}</span>
+                      {msg.toolUsed && (
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/50">
+                          {msg.toolUsed === 'search_arxiv'
+                            ? 'arXiv Preprints'
+                            : msg.toolUsed === 'search_web'
+                            ? 'Web Literature'
+                            : 'Uploaded Papers'}
+                        </span>
+                      )}
+                    </div>
+
+                    {msg.role === 'user' ? (
+                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                    ) : (
+                      <MarkdownRenderer content={msg.content} />
+                    )}
+
+                    {/* Render Citation Anchors */}
+                    {msg.attributions && msg.attributions.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-zinc-800/80">
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                          Sources & Attributions
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {msg.attributions.map((attr, idx) => (
+                            <CitationBadge
+                              key={idx}
+                              attribution={attr}
+                              onNavigate={handleNavigateCitation}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
-
-                  <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-
-                  {/* Render Citation Anchors */}
-                  {msg.attributions && msg.attributions.length > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-zinc-800/80">
-                      <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
-                        Sources & Attributions
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {msg.attributions.map((attr, idx) => (
-                          <CitationBadge
-                            key={idx}
-                            attribution={attr}
-                            onNavigate={handleNavigateCitation}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
 
-          {/* Input Box */}
-          <form
-            id="tour-input-box"
-            onSubmit={handleSubmit}
-            className="p-3 border-t border-zinc-800 bg-[#0d0f14] flex items-center gap-2"
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                activeCollection
-                  ? `Compare papers in "${activeCollection.name}"...`
-                  : 'Ask a question about this paper...'
-              }
-              disabled={isStreaming}
-              className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors disabled:opacity-50"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isStreaming}
-              className="px-3 py-2 bg-zinc-200 hover:bg-white text-zinc-900 font-medium text-xs rounded transition-colors disabled:opacity-30 disabled:hover:bg-zinc-200 flex items-center justify-center shrink-0"
+            {/* Input Box */}
+            <form
+              id="tour-input-box"
+              onSubmit={handleSubmit}
+              className="p-3 border-t border-zinc-800 bg-[#0d0f14] flex items-center gap-2 shrink-0"
             >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={
+                  activeCollection
+                    ? `Compare papers in "${activeCollection.name}"...`
+                    : 'Ask a question about this paper...'
+                }
+                disabled={isStreaming}
+                className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isStreaming}
+                className="px-3 py-2 bg-zinc-200 hover:bg-white text-zinc-900 font-medium text-xs rounded transition-colors disabled:opacity-30 disabled:hover:bg-zinc-200 flex items-center justify-center shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          </div>
         </section>
       </div>
     </div>

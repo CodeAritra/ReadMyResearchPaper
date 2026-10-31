@@ -7,9 +7,14 @@
     "apps/*"
   ],
   "scripts": {
-    "typecheck": "npm run --workspaces --if-present typecheck",
-    "test": "npm run --workspaces --if-present test",
+    "dev": "concurrently -n \"server,web\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "npm run --workspace=apps/server dev",
-    "dev:web": "npm run --workspace=apps/web dev"
+    "dev:web": "npm run --workspace=apps/web dev",
+    "build": "npm run --workspaces --if-present build",
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "test": "npm run --workspaces --if-present test"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
   }
 }

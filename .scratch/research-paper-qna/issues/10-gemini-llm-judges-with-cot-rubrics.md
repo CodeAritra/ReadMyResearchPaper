@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `faithfulnessJudge.ts` to extract claims from the agent response and verify direct entailment against retrieved Evidence Chunks.
-- [ ] Implement `citationPrecisionJudge.ts` to verify that clickable Citation Anchors link to the specific page and section containing supporting text.
-- [ ] Implement `contextRelevanceJudge.ts` and `answerRelevanceJudge.ts` to evaluate retrieval precision and query fulfillment.
-- [ ] Ensure all judges return structured Zod outputs with discrete scores (0.0, 0.5, 1.0) and reasoning rationale.
+- [x] Implement `faithfulnessJudge.ts` to extract claims from the agent response and verify direct entailment against retrieved Evidence Chunks.
+- [x] Implement `citationPrecisionJudge.ts` to verify that clickable Citation Anchors link to the specific page and section containing supporting text.
+- [x] Implement `contextRelevanceJudge.ts` and `answerRelevanceJudge.ts` to evaluate retrieval precision and query fulfillment.
+- [x] Ensure all judges return structured Zod outputs with discrete scores (0.0, 0.5, 1.0) and reasoning rationale.

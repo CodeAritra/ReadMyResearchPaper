@@ -104,3 +104,8 @@ This file tracks the persistent project state, architectural decisions, environm
 - **Golden Evaluation Dataset**: Created `apps/server/evals/datasets/attention-golden.json` covering multi-head attention dimensions, Table 2 BLEU scores, scaled dot-product formula, positional encodings, and negative abstention query.
 - **Shared Types**: Added `ExpectedCitation`, `GoldenTestCase`, `EvalFocusMetric`, `MetricCritique`, and `EvaluationResult` to `packages/types`.
 - **Verification**: Added `apps/server/src/dataset.test.ts` ensuring schema conformity and assertions validity.
+
+### [2026-11-01] Ticket 10: Implemented Gemini 2.5 Flash LLM Judges with Chain-of-Thought Rubrics
+- **Judge Implementations**: Added `evaluateFaithfulness`, `evaluateCitationPrecision`, `evaluateContextRelevance`, and `evaluateAnswerRelevance` under `apps/server/src/evals/judges/`.
+- **Reasoning Rubric**: Enforces step-by-step proposition extraction and claim entailment checks before emitting discrete scores (1.0, 0.5, 0.0), with safe JSON parser fallback.
+- **Verification**: Verified offline deterministic fallbacks and structured scoring in `apps/server/src/judges.test.ts` (8 passing tests).

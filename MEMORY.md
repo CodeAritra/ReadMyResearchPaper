@@ -109,3 +109,9 @@ This file tracks the persistent project state, architectural decisions, environm
 - **Judge Implementations**: Added `evaluateFaithfulness`, `evaluateCitationPrecision`, `evaluateContextRelevance`, and `evaluateAnswerRelevance` under `apps/server/src/evals/judges/`.
 - **Reasoning Rubric**: Enforces step-by-step proposition extraction and claim entailment checks before emitting discrete scores (1.0, 0.5, 0.0), with safe JSON parser fallback.
 - **Verification**: Verified offline deterministic fallbacks and structured scoring in `apps/server/src/judges.test.ts` (8 passing tests).
+
+### [2026-11-01] Ticket 11: Implemented Automated Evaluation Runner with CI Quality Gating
+- **CLI Runner**: Created `apps/server/src/evals/runner.ts` and wired `npm run eval` across `apps/server` and root `package.json`.
+- **Quality Gating**: Enforces quality thresholds (Faithfulness >= 0.85, Citation Precision >= 0.90, Answer Relevance >= 0.80), outputting formatted console tables and gating exit status.
+- **Model Compatibility**: Updated synthesis and judge clients to use `gemini-flash-lite-latest` for low-latency, reliable scoring without 503 errors.
+- **Verification**: Verified `npm run eval` (Faithfulness: 1.000, Citation Precision: 0.900, Context Relevance: 0.800, Answer Relevance: 1.000) and `npm test` across all 12 test suites (48 passing tests).

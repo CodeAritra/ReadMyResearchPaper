@@ -1,4 +1,4 @@
-import { Attribution, EvidenceChunk } from '@research-qna/types';
+import { Attribution, EvidenceChunk, MessageRole } from '@research-qna/types';
 import { retrievalService } from './retrieval.js';
 import { collectionStore } from './collectionStore.js';
 import { routeQueryIntent } from './agentService.js';
@@ -9,18 +9,26 @@ export interface SynthesisOptions {
   query: string;
   paperId?: string;
   collectionId?: string;
-  history?: Array<{ role: string; content: string }>;
+  history?: Array<{ role: MessageRole; content: string }>;
+  onToken?: (token: string) => void;
 }
 
-export async function streamGroundedSynthesis(
-  res: Response,
-  options: SynthesisOptions
-): Promise<void> {
-  const { query, paperId, collectionId } = options;
+export interface SynthesisResult {
+  text: string;
+  attributions: Attribution[];
+  relevantChunks: EvidenceChunk[];
+  toolUsed: string;
+}
 
-  // Agent Tool Query Routing Seam
+/**
+ * Core synthesis function that handles retrieval, tool selection,
+ * LLM generation (with Gemini streaming callback), and deterministic fallback.
+ */
+export async function generateGroundedSynthesis(
+  options: SynthesisOptions
+): Promise<SynthesisResult> {
+  const { query, paperId, collectionId, onToken } = options;
   const toolUsed = routeQueryIntent({ query, paperId, collectionId });
-  res.write(`data: ${JSON.stringify({ tool: toolUsed })}\n\n`);
 
   // Handle external search seams (arXiv / Web)
   if (toolUsed === 'search_arxiv' || toolUsed === 'search_web') {
@@ -45,19 +53,23 @@ export async function streamGroundedSynthesis(
         ? `According to external literature [${first.paperTitle}]: ${first.content}`
         : `According to external web resources [${first.paperTitle}]: ${first.content}`;
 
-    const tokens = text.split(' ');
-    for (let i = 0; i < tokens.length; i++) {
-      const token = (i === 0 ? '' : ' ') + tokens[i];
-      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    if (onToken) {
+      const tokens = text.split(' ');
+      for (let i = 0; i < tokens.length; i++) {
+        const token = (i === 0 ? '' : ' ') + tokens[i];
+        onToken(token);
+      }
     }
 
-    res.write(`data: ${JSON.stringify({ attributions })}\n\n`);
-    res.write('data: [DONE]\n\n');
-    res.end();
-    return;
+    return {
+      text,
+      attributions,
+      relevantChunks: [],
+      toolUsed,
+    };
   }
 
-  // Retrieve candidate Evidence Chunks (partitioned across collection papers if collectionId provided)
+  // Retrieve candidate Evidence Chunks
   let relevantChunks: EvidenceChunk[] = [];
   if (collectionId) {
     const collection = collectionStore.getCollection(collectionId);
@@ -71,27 +83,33 @@ export async function streamGroundedSynthesis(
     });
   }
 
-  // Evaluate evidence quality: If no matches or score is zero, refuse
+  const topScore = relevantChunks[0]?.score ?? 0;
+  // If score is a float <= 1 (cosine similarity from Qdrant), require >= 0.55
+  // If score is integer > 1 (BM25 keyword matches), require >= 1
   const hasStrongEvidence =
-    relevantChunks.length > 0 && (relevantChunks[0].score ?? 0) > 0;
+    relevantChunks.length > 0 &&
+    (topScore > 1 ? topScore >= 1 : topScore >= 0.80);
 
   if (!hasStrongEvidence) {
     const refusalText =
       'The uploaded paper does not contain sufficient evidence to answer this question. Please refer directly to the document sections or ask a question directly related to the methodology, results, or concepts presented in the text.';
 
-    const tokens = refusalText.split(' ');
-    for (let i = 0; i < tokens.length; i++) {
-      const token = (i === 0 ? '' : ' ') + tokens[i];
-      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    if (onToken) {
+      const tokens = refusalText.split(' ');
+      for (let i = 0; i < tokens.length; i++) {
+        const token = (i === 0 ? '' : ' ') + tokens[i];
+        onToken(token);
+      }
     }
 
-    res.write(`data: ${JSON.stringify({ attributions: [] })}\n\n`);
-    res.write('data: [DONE]\n\n');
-    res.end();
-    return;
+    return {
+      text: refusalText,
+      attributions: [],
+      relevantChunks: [],
+      toolUsed,
+    };
   }
 
-  // Construct Attributions ensuring balanced representation across papers
   const attributions: Attribution[] = relevantChunks.slice(0, 6).map((chunk) => ({
     paperId: chunk.paperId,
     paperTitle: chunk.paperTitle,
@@ -101,16 +119,17 @@ export async function streamGroundedSynthesis(
     sourceType: 'uploaded_paper',
   }));
 
-  // If Gemini API Key is available, invoke LangChain ChatGoogleGenerativeAI
+  // If Gemini API Key is available, invoke ChatGoogleGenerativeAI
   const apiKey = process.env.GEMINI_API_KEY;
-  if (apiKey) {
+  if (apiKey && !apiKey.includes('your_gemini_api_key')) {
     try {
       const { ChatGoogleGenerativeAI } = await import('@langchain/google-genai');
-      const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+      const geminiModel = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
       const model = new ChatGoogleGenerativeAI({
         apiKey,
         model: geminiModel,
         temperature: 0.1,
+        maxRetries: 1,
       });
 
       const contextText = relevantChunks
@@ -130,23 +149,27 @@ If the context does not contain sufficient evidence to answer, state explicitly:
         { role: 'user', content: query },
       ]);
 
+      let fullText = '';
       for await (const chunk of stream) {
         const text = typeof chunk.content === 'string' ? chunk.content : '';
         if (text) {
-          res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+          fullText += text;
+          onToken?.(text);
         }
       }
 
-      res.write(`data: ${JSON.stringify({ attributions })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
+      return {
+        text: fullText,
+        attributions,
+        relevantChunks,
+        toolUsed,
+      };
     } catch (err) {
       console.warn('[Synthesis] Gemini stream failed, using deterministic synthesizer fallback:', err);
     }
   }
 
-  // High-performance deterministic grounded synthesizer for tests and offline local dev
+  // Deterministic grounded synthesizer for tests and offline dev
   const distinctPapers = Array.from(new Set(relevantChunks.map((c) => c.paperId)));
   let summaryTokens: string[] = [];
 
@@ -171,11 +194,39 @@ If the context does not contain sufficient evidence to answer, state explicitly:
     ];
   }
 
-  for (const token of summaryTokens) {
-    res.write(`data: ${JSON.stringify({ token })}\n\n`);
+  const text = summaryTokens.join('');
+  if (onToken) {
+    for (const token of summaryTokens) {
+      onToken(token);
+    }
   }
 
-  res.write(`data: ${JSON.stringify({ attributions })}\n\n`);
+  return {
+    text,
+    attributions,
+    relevantChunks,
+    toolUsed,
+  };
+}
+
+/**
+ * Express SSE stream handler for chat synthesis.
+ */
+export async function streamGroundedSynthesis(
+  res: Response,
+  options: SynthesisOptions
+): Promise<void> {
+  const toolUsed = routeQueryIntent(options);
+  res.write(`data: ${JSON.stringify({ tool: toolUsed })}\n\n`);
+
+  const result = await generateGroundedSynthesis({
+    ...options,
+    onToken: (token) => {
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    },
+  });
+
+  res.write(`data: ${JSON.stringify({ attributions: result.attributions })}\n\n`);
   res.write('data: [DONE]\n\n');
   res.end();
 }

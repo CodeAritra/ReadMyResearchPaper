@@ -10,13 +10,14 @@ export function getJudgeModel(): ChatGoogleGenerativeAI | undefined {
     return undefined;
   }
 
-  // Use Gemini 2.5 Flash for fast, rigorous reasoning
-  const modelName = process.env.GEMINI_EVAL_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  // Use fast, stable Gemini flash model for evaluation judging
+  const modelName = process.env.GEMINI_EVAL_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
 
   return new ChatGoogleGenerativeAI({
     apiKey,
     model: modelName,
     temperature: 0.0,
+    maxRetries: 1,
   });
 }
 

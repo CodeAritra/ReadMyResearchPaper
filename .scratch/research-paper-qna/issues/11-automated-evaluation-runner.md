@@ -4,11 +4,11 @@
 
 **Blocked by:** 08: Pure LangSmith Cloud Tracing & Project Isolation, 09: Seeded Manuscript Golden Evaluation Dataset, 10: Gemini 2.5 Flash LLM Judges with Chain-of-Thought Rubrics
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `apps/server/evals/runner.ts` that iterates through golden test cases and queries the RAG pipeline.
-- [ ] Direct telemetry to `LANGCHAIN_PROJECT="research-paper-qna-evals"` during evaluation execution.
-- [ ] Evaluate every test output across the Extended Academic Triad judges and aggregate average scores.
-- [ ] Format and print results table with status badges and latencies.
-- [ ] Enforce gating thresholds (Faithfulness >= 0.85, Citation Precision >= 0.90, Answer Relevance >= 0.80) and exit with code 1 on regression.
-- [ ] Add `"eval"` script in root `package.json` and `apps/server/package.json`.
+- [x] Implement `apps/server/src/evals/runner.ts` that iterates through golden test cases and queries the RAG pipeline.
+- [x] Direct telemetry to `LANGCHAIN_PROJECT="research-paper-qna-evals"` during evaluation execution.
+- [x] Evaluate every test output across the Extended Academic Triad judges and aggregate average scores.
+- [x] Format and print results table with status badges and latencies.
+- [x] Enforce gating thresholds (Faithfulness >= 0.85, Citation Precision >= 0.90, Answer Relevance >= 0.80) and exit with code 1 on regression.
+- [x] Add `"eval"` script in root `package.json` and `apps/server/package.json`.

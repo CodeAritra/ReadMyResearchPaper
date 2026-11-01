@@ -13,6 +13,7 @@
     "build": "npm run --workspaces --if-present build",
     "typecheck": "npm run --workspaces --if-present typecheck",
     "test": "npm run --workspaces --if-present test",
+    "eval": "npm run --workspace=apps/server eval",
     "qdrant:stats": "node apps/server/scripts/check-qdrant.js",
     "qdrant:clear": "node apps/server/scripts/clear-except-attention.js"
   },

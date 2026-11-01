@@ -99,3 +99,8 @@ This file tracks the persistent project state, architectural decisions, environm
 - **API Status Endpoint**: Added `GET /api/observability/status` in `apps/server/src/app.ts` to inspect active LangSmith project and enablement.
 - **Project Isolation**: Configured `research-paper-qna` as default live query stream and `research-paper-qna-evals` as isolated benchmark project.
 - **Verification**: Verified with vitest in `apps/server/src/observability.test.ts` and `npm run typecheck`.
+
+### [2026-11-01] Ticket 09: Created Seeded Manuscript Golden Evaluation Dataset
+- **Golden Evaluation Dataset**: Created `apps/server/evals/datasets/attention-golden.json` covering multi-head attention dimensions, Table 2 BLEU scores, scaled dot-product formula, positional encodings, and negative abstention query.
+- **Shared Types**: Added `ExpectedCitation`, `GoldenTestCase`, `EvalFocusMetric`, `MetricCritique`, and `EvaluationResult` to `packages/types`.
+- **Verification**: Added `apps/server/src/dataset.test.ts` ensuring schema conformity and assertions validity.

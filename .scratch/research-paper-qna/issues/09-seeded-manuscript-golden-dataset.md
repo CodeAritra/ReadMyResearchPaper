@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Create `apps/server/evals/datasets/attention-golden.json` with structured test case schema (`id`, `paperId`, `query`, `referenceAnswer`, `expectedCitations`, `focusMetric`).
-- [ ] Cover multi-head attention projection dimensions ($d_k, d_v, d_{model}, h$) referencing Section 3.2.2 and Page 4.
-- [ ] Cover BLEU scores on WMT 2014 translation tasks referencing Table 2 on Page 8.
-- [ ] Cover scaled dot-product attention formula referencing Section 3.2.1 and Page 4.
-- [ ] Cover negative/unanswerable query to test graceful abstention without hallucinations.
+- [x] Create `apps/server/evals/datasets/attention-golden.json` with structured test case schema (`id`, `paperId`, `query`, `referenceAnswer`, `expectedCitations`, `focusMetric`).
+- [x] Cover multi-head attention projection dimensions ($d_k, d_v, d_{model}, h$) referencing Section 3.2.2 and Page 4.
+- [x] Cover BLEU scores on WMT 2014 translation tasks referencing Table 2 on Page 8.
+- [x] Cover scaled dot-product attention formula referencing Section 3.2.1 and Page 4.
+- [x] Cover negative/unanswerable query to test graceful abstention without hallucinations.

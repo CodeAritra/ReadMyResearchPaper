@@ -82,3 +82,36 @@ export interface IngestionJob {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ExpectedCitation {
+  pageNumber: number;
+  sectionTitle: string;
+}
+
+export type EvalFocusMetric = 'Faithfulness' | 'Citation Precision' | 'Context Relevance' | 'Answer Relevance';
+
+export interface GoldenTestCase {
+  id: string;
+  paperId: string;
+  query: string;
+  referenceAnswer: string;
+  expectedCitations: ExpectedCitation[];
+  focusMetric: EvalFocusMetric;
+  shouldAbstain?: boolean;
+}
+
+export interface MetricCritique {
+  score: number; // 0.0 to 1.0
+  reasoning: string;
+}
+
+export interface EvaluationResult {
+  testId: string;
+  query: string;
+  faithfulness: MetricCritique;
+  citationPrecision: MetricCritique;
+  contextRelevance: MetricCritique;
+  answerRelevance: MetricCritique;
+  latencyMs: number;
+  passed: boolean;
+}

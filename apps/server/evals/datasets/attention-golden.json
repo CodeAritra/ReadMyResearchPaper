@@ -1,0 +1,67 @@
+[
+  {
+    "id": "attention-multihead-dims",
+    "paperId": "paper-attention",
+    "query": "What are the projection dimensions d_k and d_v used in the multi-head attention mechanism?",
+    "referenceAnswer": "In the multi-head attention mechanism, the authors employ h = 8 parallel attention layers (or heads). For each head, the projection dimensions are d_k = d_v = d_model / h = 64, where d_model = 512.",
+    "expectedCitations": [
+      {
+        "pageNumber": 4,
+        "sectionTitle": "3.2.2 Multi-Head Attention"
+      }
+    ],
+    "focusMetric": "Citation Precision",
+    "shouldAbstain": false
+  },
+  {
+    "id": "attention-wmt-bleu-scores",
+    "paperId": "paper-attention",
+    "query": "What BLEU score did the Transformer (big) model achieve on the WMT 2014 English-to-German and English-to-French translation tasks?",
+    "referenceAnswer": "On the WMT 2014 English-to-German translation task, the Transformer (big) model achieved a BLEU score of 28.4, outperforming previous models by over 2.0 BLEU. On the English-to-French translation task, it established a new state-of-the-art BLEU score of 41.8 (or 41.0 single model).",
+    "expectedCitations": [
+      {
+        "pageNumber": 8,
+        "sectionTitle": "Table 2: The Transformer achieves better BLEU scores"
+      }
+    ],
+    "focusMetric": "Faithfulness",
+    "shouldAbstain": false
+  },
+  {
+    "id": "attention-scaled-dot-product-formula",
+    "paperId": "paper-attention",
+    "query": "What is the mathematical formula for Scaled Dot-Product Attention and why is the scaling factor 1/sqrt(d_k) applied?",
+    "referenceAnswer": "The formula is Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k)) V. The scaling factor of 1/sqrt(d_k) is applied because for large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients.",
+    "expectedCitations": [
+      {
+        "pageNumber": 4,
+        "sectionTitle": "3.2.1 Scaled Dot-Product Attention"
+      }
+    ],
+    "focusMetric": "Faithfulness",
+    "shouldAbstain": false
+  },
+  {
+    "id": "attention-positional-encoding",
+    "paperId": "paper-attention",
+    "query": "How are positional encodings computed in the Transformer to inject token sequence order?",
+    "referenceAnswer": "The positional encodings use sine and cosine functions of different frequencies: PE_(pos, 2i) = sin(pos / 10000^(2i/d_model)) and PE_(pos, 2i+1) = cos(pos / 10000^(2i/d_model)), having the same dimension d_model = 512 as the embeddings so they can be summed.",
+    "expectedCitations": [
+      {
+        "pageNumber": 6,
+        "sectionTitle": "3.5 Positional Encoding"
+      }
+    ],
+    "focusMetric": "Citation Precision",
+    "shouldAbstain": false
+  },
+  {
+    "id": "attention-negative-out-of-scope",
+    "paperId": "paper-attention",
+    "query": "How many parameters did the Llama 3 model have and what RLHF algorithm was used to train it?",
+    "referenceAnswer": "The paper does not contain sufficient evidence to answer this question. The manuscript is Vaswani et al. (2017) presenting the original Transformer architecture, which does not discuss Llama 3 or RLHF algorithms.",
+    "expectedCitations": [],
+    "focusMetric": "Faithfulness",
+    "shouldAbstain": true
+  }
+]

@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Ensure `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`, and `LANGCHAIN_PROJECT` are seamlessly resolved in both development and production environments.
-- [ ] Verify that LangChain agent invocations and nested tool calls (`search_uploaded_papers`) automatically stream execution spans into LangSmith Cloud.
-- [ ] Provide utility support for dynamic project switching to `research-paper-qna-evals` during automated evaluation runs.
-- [ ] Confirm no extraneous console tracing overhead is introduced to maintain clean academic server logs.
+- [x] Ensure `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`, and `LANGCHAIN_PROJECT` are seamlessly resolved in both development and production environments.
+- [x] Verify that LangChain agent invocations and nested tool calls (`search_uploaded_papers`) automatically stream execution spans into LangSmith Cloud.
+- [x] Provide utility support for dynamic project switching to `research-paper-qna-evals` during automated evaluation runs.
+- [x] Confirm no extraneous console tracing overhead is introduced to maintain clean academic server logs.

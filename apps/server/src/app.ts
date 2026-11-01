@@ -12,6 +12,7 @@ import { extractDocumentStructure } from './services/extraction.js';
 import { chunkPaperBySections, retrievalService } from './services/retrieval.js';
 import { streamGroundedSynthesis } from './services/synthesis.js';
 import { seedAttentionPaper } from './services/seedPaper.js';
+import { getTracingStatus, initializeTracing } from './services/observability.js';
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -39,6 +40,7 @@ const upload = multer({
 });
 
 export function createApp(): express.Application {
+  initializeTracing();
   const app = express();
 
   // Seed actual Attention Is All You Need paper & index chunks
@@ -318,6 +320,11 @@ export function createApp(): express.Application {
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Failed to fetch Qdrant stats' });
     }
+  });
+
+  // Observability & LangSmith Tracing Status Endpoint
+  app.get('/api/observability/status', (_req: Request, res: Response): void => {
+    res.json(getTracingStatus());
   });
 
   // Chat Streaming Endpoint with Grounded Synthesis & Attributions

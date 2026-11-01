@@ -93,3 +93,9 @@ This file tracks the persistent project state, architectural decisions, environm
 - **Observability**: Pure LangSmith Cloud tracing (`LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`) with project isolation between user queries (`research-paper-qna`) and evaluation benchmarks (`research-paper-qna-evals`).
 - **Evaluations**: Native TypeScript LLM-as-a-judge evaluation harness using Gemini 2.5 Flash with structured Zod rubrics measuring the Extended Academic Triad (Context Relevance, Faithfulness, Answer Relevance, and Citation Precision).
 - **Domain Modeling**: Registered terms `Evaluation Suite`, `Faithfulness`, `Citation Precision`, and `Execution Trace` in `GLOSSARY.md`.
+
+### [2026-11-01] Ticket 08: Implemented Pure LangSmith Cloud Tracing & Project Isolation
+- **Observability Service**: Created `apps/server/src/services/observability.ts` providing `getTracingStatus()`, `initializeTracing()`, and `withEvalProject()`.
+- **API Status Endpoint**: Added `GET /api/observability/status` in `apps/server/src/app.ts` to inspect active LangSmith project and enablement.
+- **Project Isolation**: Configured `research-paper-qna` as default live query stream and `research-paper-qna-evals` as isolated benchmark project.
+- **Verification**: Verified with vitest in `apps/server/src/observability.test.ts` and `npm run typecheck`.

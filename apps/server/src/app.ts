@@ -100,7 +100,7 @@ export function createApp(): express.Application {
         return;
       }
 
-      const paperId = `paper-${crypto.randomUUID()}`;
+      const paperId = fileHash ? `paper-${fileHash.slice(0, 16)}` : `paper-${crypto.randomUUID()}`;
       const job = jobManager.createJob(paperId);
 
       res.status(202).json({

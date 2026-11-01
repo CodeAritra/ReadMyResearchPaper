@@ -3,6 +3,7 @@ import { retrievalService } from './retrieval.js';
 import { collectionStore } from './collectionStore.js';
 import { routeQueryIntent } from './agentService.js';
 import { searchArxivTool, searchWebTool, ToolEvidence } from './agentTools.js';
+import { scheduleOnlineEvaluation } from './onlineEvaluator.js';
 import { Response } from 'express';
 
 export interface SynthesisOptions {
@@ -11,6 +12,7 @@ export interface SynthesisOptions {
   collectionId?: string;
   history?: Array<{ role: MessageRole; content: string }>;
   onToken?: (token: string) => void;
+  skipOnlineEval?: boolean;
 }
 
 export interface SynthesisResult {
@@ -18,6 +20,7 @@ export interface SynthesisResult {
   attributions: Attribution[];
   relevantChunks: EvidenceChunk[];
   toolUsed: string;
+  runId?: string;
 }
 
 /**
@@ -84,11 +87,11 @@ export async function generateGroundedSynthesis(
   }
 
   const topScore = relevantChunks[0]?.score ?? 0;
-  // If score is a float <= 1 (cosine similarity from Qdrant), require >= 0.55
+  // If score is a float <= 1 (cosine similarity from Qdrant), require >= 0.40
   // If score is integer > 1 (BM25 keyword matches), require >= 1
   const hasStrongEvidence =
     relevantChunks.length > 0 &&
-    (topScore > 1 ? topScore >= 1 : topScore >= 0.80);
+    (topScore > 1 ? topScore >= 1 : topScore >= 0.40);
 
   if (!hasStrongEvidence) {
     const refusalText =
@@ -144,10 +147,23 @@ Every factual claim must cite its source in the format [Section, p. X] or [Paper
 If comparing multiple papers, balance citations across each compared paper.
 If the context does not contain sufficient evidence to answer, state explicitly: "The paper does not contain sufficient evidence to answer this question."`;
 
-      const stream = await model.stream([
-        { role: 'system', content: `${systemPrompt}\n\nContext:\n${contextText}` },
-        { role: 'user', content: query },
-      ]);
+      let capturedRunId: string | undefined;
+
+      const callbacks = [
+        {
+          handleChatModelStart(_llm: any, _messages: any, runId: string) {
+            capturedRunId = runId;
+          },
+        },
+      ];
+
+      const stream = await model.stream(
+        [
+          { role: 'system', content: `${systemPrompt}\n\nContext:\n${contextText}` },
+          { role: 'user', content: query },
+        ],
+        { callbacks }
+      );
 
       let fullText = '';
       for await (const chunk of stream) {
@@ -158,11 +174,22 @@ If the context does not contain sufficient evidence to answer, state explicitly:
         }
       }
 
+      if (capturedRunId && fullText.trim().length > 0 && !options.skipOnlineEval) {
+        scheduleOnlineEvaluation({
+          runId: capturedRunId,
+          query,
+          answer: fullText,
+          evidenceChunks: relevantChunks,
+          attributions,
+        });
+      }
+
       return {
         text: fullText,
         attributions,
         relevantChunks,
         toolUsed,
+        runId: capturedRunId,
       };
     } catch (err) {
       console.warn('[Synthesis] Gemini stream failed, using deterministic synthesizer fallback:', err);

@@ -115,3 +115,20 @@ This file tracks the persistent project state, architectural decisions, environm
 - **Quality Gating**: Enforces quality thresholds (Faithfulness >= 0.85, Citation Precision >= 0.90, Answer Relevance >= 0.80), outputting formatted console tables and gating exit status.
 - **Model Compatibility**: Updated synthesis and judge clients to use `gemini-flash-lite-latest` for low-latency, reliable scoring without 503 errors.
 - **Verification**: Verified `npm run eval` (Faithfulness: 1.000, Citation Precision: 0.900, Context Relevance: 0.800, Answer Relevance: 1.000) and `npm test` across all 12 test suites (48 passing tests).
+
+### [2026-11-01] Fixed False Refusals & Tracing on Live Chat
+- **Root Cause 1 (Threshold Too High)**: In `synthesis.ts`, `topScore >= 0.80` was blocking all natural language questions because embedding cosine similarities for broad inquiries typically range between 0.45 and 0.70. Lowered threshold to 0.40, allowing Gemini to synthesize grounded answers and perform refusal only when evidence is genuinely lacking.
+- **Root Cause 2 (Tracing Bypass)**: Because previous queries were aborted at the threshold check before `model.stream` was invoked, LangSmith received no traces for live user queries in `research-paper-qna`. With the threshold fixed, every chat query streams model calls directly into LangSmith Cloud.
+- **Root Cause 3 (Server Restart Paper Loss)**: `paperStore` was only in memory; when restarted, previously uploaded papers lost their mapping. Added disk persistence (`uploads/papers-manifest.json`), deterministic paper IDs derived from file hash (`paper-${hash.slice(0, 16)}`), and Qdrant title-based fallback querying in `retrievalService.search()`.
+- **Verification**: Verified live streaming synthesis on uploaded manuscript "RAG Makes Guardrails..." for both summary and abstract queries, and confirmed `npm test` passes across all 12 test suites.
+
+### [2026-11-01] Implemented Online Production Evaluations (LangSmith Feedback)
+- **Online Evaluator Service**: Created `apps/server/src/services/onlineEvaluator.ts` using LangSmith `Client.createFeedback()`.
+- **Extended Triad Scoring**: Evaluates all 4 metrics (`faithfulness`, `citation_precision`, `context_relevance`, `answer_relevance`) asynchronously in the background for live production user queries in `research-paper-qna`.
+- **Asynchronous Callback Hook**: Updated `generateGroundedSynthesis` in `synthesis.ts` to capture the LLM `runId` via `handleChatModelStart` callback and asynchronously dispatch `scheduleOnlineEvaluation` without blocking user token streaming.
+- **Verification**: Verified with vitest (`apps/server/src/onlineEvaluator.test.ts`), `npm test` across all 13 test suites (50 passing tests), and live query test emitting real-time feedback to LangSmith.
+
+### [2026-11-01] Integrated LangSmith Evaluation Feedback into Benchmark Runner
+- **Eval Feedback Sync**: Enhanced `apps/server/src/evals/runner.ts` and `apps/server/src/services/synthesis.ts` so that when `npm run eval` executes, `synthesis` returns the LangSmith `runId` and the runner submits all 5 metric evaluations (`faithfulness`, `citation_precision`, `context_relevance`, `answer_relevance`, `eval_passed`) directly as LangSmith Feedback to the trace in `research-paper-qna-evals`.
+- **Clean Separation**: Added `skipOnlineEval: true` option in `synthesis.ts` so that benchmark evaluation runs use the complete 4-judge evaluation (with `expectedCitations` and `referenceAnswer`) instead of triggering duplicate background production online evals.
+- **Verification**: Verified `npm run typecheck` (0 errors) and `npm test` across all 13 test suites (50 passing tests).

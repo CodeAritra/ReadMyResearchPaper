@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from './app.js';
+import { paperStore } from './services/paperStore.js';
 
 describe('Document Ingestion API Seam', () => {
+  beforeEach(() => {
+    paperStore.clear();
+  });
   it('should accept a PDF upload, process extraction asynchronously, and persist paper metadata and sections', async () => {
     const app = createApp();
 

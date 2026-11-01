@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { Client } from 'langsmith';
 import { GoldenTestCase, EvaluationResult } from '@research-qna/types';
 import { withEvalProject, getTracingStatus } from '../services/observability.js';
 import { seedAttentionPaper } from '../services/seedPaper.js';
@@ -34,6 +35,7 @@ export const EVAL_THRESHOLDS = {
 export async function runEvaluationSuite(options?: {
   datasetPath?: string;
   enforceThresholds?: boolean;
+  maxCases?: number;
 }): Promise<{
   results: EvaluationResult[];
   averages: {
@@ -54,7 +56,10 @@ export async function runEvaluationSuite(options?: {
   }
 
   const raw = fs.readFileSync(datasetFile, 'utf8');
-  const testCases: GoldenTestCase[] = JSON.parse(raw);
+  let testCases: GoldenTestCase[] = JSON.parse(raw);
+  if (options?.maxCases && options.maxCases > 0) {
+    testCases = testCases.slice(0, options.maxCases);
+  }
 
   console.log('\n======================================================');
   console.log('  RESEARCH PAPER Q&A: EVALUATION & OBSERVABILITY RUNNER');
@@ -82,6 +87,7 @@ export async function runEvaluationSuite(options?: {
       const response = await generateGroundedSynthesis({
         query: tc.query,
         paperId: tc.paperId,
+        skipOnlineEval: true,
       });
 
       const latencyMs = Date.now() - startTime;
@@ -120,6 +126,38 @@ export async function runEvaluationSuite(options?: {
         citationPrecision.score >= 0.8 &&
         answerRelevance.score >= 0.5;
 
+      // Attach feedback directly to the LangSmith evaluation trace if available
+      if (response.runId && process.env.LANGCHAIN_API_KEY && process.env.LANGCHAIN_TRACING_V2 === 'true') {
+        try {
+          const client = new Client({ apiKey: process.env.LANGCHAIN_API_KEY });
+          await Promise.allSettled([
+            client.createFeedback(response.runId, 'faithfulness', {
+              score: faithfulness.score,
+              comment: faithfulness.reasoning,
+            }),
+            client.createFeedback(response.runId, 'citation_precision', {
+              score: citationPrecision.score,
+              comment: citationPrecision.reasoning,
+            }),
+            client.createFeedback(response.runId, 'context_relevance', {
+              score: contextRelevance.score,
+              comment: contextRelevance.reasoning,
+            }),
+            client.createFeedback(response.runId, 'answer_relevance', {
+              score: answerRelevance.score,
+              comment: answerRelevance.reasoning,
+            }),
+            client.createFeedback(response.runId, 'eval_passed', {
+              score: testPassed ? 1 : 0,
+              comment: testPassed ? 'Passed all quality thresholds' : 'Failed quality thresholds',
+            }),
+          ]);
+          console.log(`[Observability] Synced 5 feedback scores to LangSmith trace ${response.runId}`);
+        } catch (feedbackErr) {
+          console.warn('[Observability] Could not attach feedback to trace:', feedbackErr);
+        }
+      }
+
       results.push({
         testId: tc.id,
         query: tc.query,
@@ -130,6 +168,11 @@ export async function runEvaluationSuite(options?: {
         latencyMs,
         passed: testPassed,
       });
+
+      if (i < testCases.length - 1) {
+        // Pacing delay to stay well within Gemini free-tier TPM/RPM limits
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
     }
   });
 

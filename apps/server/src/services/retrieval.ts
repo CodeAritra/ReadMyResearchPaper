@@ -198,9 +198,17 @@ export class RetrievalService {
           }
         }
 
-        // Batch embed chunks
+        // Batch embed chunks in batches of 5 with delay to stay within rate limits
         const texts = chunks.map((c) => `${c.paperTitle} - ${c.sectionTitle}\n${c.content}`);
-        const vectors = await embeddings.embedDocuments(texts);
+        const vectors: number[][] = [];
+        for (let i = 0; i < texts.length; i += 5) {
+          const batchTexts = texts.slice(i, i + 5);
+          const batchVectors = await embeddings.embedDocuments(batchTexts);
+          vectors.push(...batchVectors);
+          if (i + 5 < texts.length) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+        }
 
         const points = chunks.map((chunk, idx) => ({
           id: this.generateDeterministicPointId(chunk.paperId, chunk.chunkIndex),
@@ -269,8 +277,27 @@ export class RetrievalService {
           with_payload: true,
         });
 
-        if (res.points && res.points.length > 0) {
-          const qdrantResults: EvidenceChunk[] = res.points.map((pt) => {
+        let points = (res.points || []) as any[];
+
+        // Title Fallback: If 0 points matched by paperId, check if points match by paperTitle
+        if (points.length === 0 && options?.paperId) {
+          const { paperStore } = await import('./paperStore.js');
+          const paper = paperStore.getPaper(options.paperId);
+          if (paper?.title) {
+            const titleRes = await client.query(this.qdrantCollection, {
+              query: queryVec,
+              filter: {
+                must: [{ key: 'paperTitle', match: { value: paper.title } }],
+              },
+              limit,
+              with_payload: true,
+            });
+            points = (titleRes.points || []) as any[];
+          }
+        }
+
+        if (points.length > 0) {
+          const qdrantResults: EvidenceChunk[] = points.map((pt) => {
             const p = (pt.payload || {}) as any;
             return {
               id: String(pt.id),

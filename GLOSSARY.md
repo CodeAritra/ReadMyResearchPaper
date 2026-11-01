@@ -49,3 +49,21 @@ _Avoid_: Dispatcher, classifier, broker
 **Partitioned Retrieval**:
 A multi-paper retrieval strategy that fetches top Evidence Chunks for each paper independently to guarantee balanced representation across papers.
 _Avoid_: Balanced search, bucketed query
+
+### Evaluation & Observability
+
+**Evaluation Suite**:
+A curated collection of benchmark papers, golden question-answer pairs, and automated scoring metrics used to measure RAG system quality.
+_Avoid_: Test suite, eval benchmark, validation set
+
+**Faithfulness**:
+The degree to which every claim in an agent's synthesized answer is grounded in and directly entailed by the retrieved Evidence Chunks.
+_Avoid_: Groundedness, hallucination score, truthfulness
+
+**Citation Precision**:
+The metric measuring whether clickable Citation Anchors correctly point to the specific pages, sections, and Evidence Chunks that factually support each asserted claim.
+_Avoid_: Anchor accuracy, reference recall, citation score
+
+**Execution Trace**:
+An end-to-end telemetry record capturing query lifecycle steps, including tool invocations, token latencies, model inputs, and retrieved chunks.
+_Avoid_: Log entry, run span, request record

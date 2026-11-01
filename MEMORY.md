@@ -87,3 +87,9 @@ This file tracks the persistent project state, architectural decisions, environm
 ### [2026-10-31] Fixed PDF Extraction & Page Count Calculation
 - **Issue**: Uploaded PDFs were mistakenly reporting 2 pages regardless of actual length, and chat window showed demo paper welcome message.
 - **Fix**: Upgraded extraction engine using `pdf-parse` v2 (`PDFParse.create()`, `parser.getInfo()`, `parser.destroy()`) to extract full text and accurate page counts across all pages. Adjusted chat welcome message to dynamically reflect the selected paper.
+
+### [2026-11-01] Formalized Evaluations and Observability Architecture
+- **Decisions & ADR**: Created `docs/adr/0009-evals-and-observability-strategy.md` following `/grill-with-docs` session.
+- **Observability**: Pure LangSmith Cloud tracing (`LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`) with project isolation between user queries (`research-paper-qna`) and evaluation benchmarks (`research-paper-qna-evals`).
+- **Evaluations**: Native TypeScript LLM-as-a-judge evaluation harness using Gemini 2.5 Flash with structured Zod rubrics measuring the Extended Academic Triad (Context Relevance, Faithfulness, Answer Relevance, and Citation Precision).
+- **Domain Modeling**: Registered terms `Evaluation Suite`, `Faithfulness`, `Citation Precision`, and `Execution Trace` in `GLOSSARY.md`.
